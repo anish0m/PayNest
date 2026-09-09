@@ -1,5 +1,5 @@
 /**
- * Ruleset (such as password length)
+ * Ruleset
  * No HTTP. No HttpServletRequest, no 404, no JSON.
  */
 
