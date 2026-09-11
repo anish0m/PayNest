@@ -87,4 +87,24 @@ class UserTest {
         users.add(lincoln);
         assertEquals(1, users.size());
     }
+
+    @Test
+    void setFirstNameRejectsNull() {
+        User user = new User("Anishom", "Frost", "khi0ne@example.com", "Pass1234#");
+
+        assertThrows(IllegalArgumentException.class, () -> user.setFirstName(null));
+    }
+
+    @Test
+    void setFirstNameRejectsBlank() {
+        User user = new User("Anishom", "Frost", "khi0ne@example.com", "Pass1234#");
+
+        assertThrows(IllegalArgumentException.class, () -> user.setFirstName(""));
+    }
+
+    @Test
+    void constructorRejectsNullFirstName() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new User(null, "Frost", "khi0ne@example.com", "Pass1234#"));
+    }
 }

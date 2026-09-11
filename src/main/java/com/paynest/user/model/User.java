@@ -23,18 +23,10 @@ public class User {
 
     //    constructor
     public User(String firstName, String lastName, String email, String password) {
-        if (firstName == null || firstName.isBlank()) {
-            throw new IllegalArgumentException("firstName cannot be null or blank");
-        }
-        if (lastName == null || lastName.isBlank()) {
-            throw new IllegalArgumentException("lastName cannot be null or blank");
-        }
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("Email cannot be null or blank");
-        }
+        requireText(email, "Email");
 
-        this.firstName = firstName;
-        this.lastName = lastName;
+        setFirstName(firstName);
+        setLastName(lastName);
         this.email = email;
         setPassword(password);
     }
@@ -42,6 +34,24 @@ public class User {
     //    auto username from firstname and lastname
     public String getUsername() {
         return "@" + firstName.toLowerCase() + "-" + lastName.toLowerCase();
+    }
+
+    private static void requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " cannot be null or blank");
+        }
+    }
+
+    // firstname setter
+    public void setFirstName(String firstName) {
+        requireText(firstName, "First Name");
+        this.firstName = firstName;
+    }
+
+    // lastname setter
+    public void setLastName(String lastName) {
+        requireText(lastName, "Last Name");
+        this.lastName = lastName;
     }
 
     //    password setter
