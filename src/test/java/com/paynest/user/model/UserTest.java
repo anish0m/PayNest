@@ -29,6 +29,7 @@ class UserTest {
     void toStringDoesNotLeakThePassword() {
         User user = new User("Anishom", "Frost", "khi0ne@example.com", "Pass1234#");
         assertFalse(user.toString().contains("Pass1234#"));
+        assertTrue(user.toString().contains("khi0ne@example.com"));
     }
 
     @Test

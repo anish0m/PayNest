@@ -2,12 +2,14 @@ package com.paynest.user.model;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import lombok.AccessLevel;
 
 import java.util.Optional;
 
 @Getter
 @Setter
+@ToString(exclude = "password")
 public class User {
 
     private String firstName;
