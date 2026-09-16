@@ -2,7 +2,8 @@ package com.paynest.user.service;
 
 import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.model.User;
-import com.paynest.user.repository.InMemoryUserRepository;
+import com.paynest.user.repository.UserRepository;
+
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -11,9 +12,9 @@ import java.util.Optional;
 @Service
 public class UserService {
 
-    private final InMemoryUserRepository repository;
+    private final UserRepository repository;
 
-    public UserService(InMemoryUserRepository repository) {
+    public UserService(UserRepository repository) {
         this.repository = repository;
     }
 

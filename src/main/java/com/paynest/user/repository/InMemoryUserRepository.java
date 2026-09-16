@@ -3,7 +3,9 @@ package com.paynest.user.repository;
 import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.model.User;
+
 import org.springframework.stereotype.Repository;
+import org.springframework.context.annotation.Profile;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,7 +14,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
-public class InMemoryUserRepository {
+@Profile("test")
+public class InMemoryUserRepository implements UserRepository {
 
     private final Map<String, User> usersByEmail = new ConcurrentHashMap<>();
 
