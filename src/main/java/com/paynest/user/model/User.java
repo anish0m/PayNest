@@ -12,6 +12,9 @@ import java.util.Optional;
 @ToString(exclude = "password")
 public class User {
 
+    private Long id;
+    private java.time.Instant createdAt;
+
     private String firstName;
     private String lastName;
 
@@ -25,6 +28,15 @@ public class User {
 
     //    constructor
     public User(String firstName, String lastName, String email, String password) {
+        requireText(email, "Email");
+        setFirstName(firstName);
+        setLastName(lastName);
+        this.email = email;
+        setPassword(password);
+    }
+
+    public User(Long id, String firstName, String lastName, String email,
+                String password, String image, java.time.Instant createdAt) {
         requireText(email, "Email");
 
         setFirstName(firstName);
