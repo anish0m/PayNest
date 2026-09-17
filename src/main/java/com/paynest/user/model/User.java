@@ -12,7 +12,9 @@ import java.util.Optional;
 @ToString(exclude = "password")
 public class User {
 
+    @Setter(AccessLevel.NONE)
     private Long id;
+    @Setter(AccessLevel.NONE)
     private java.time.Instant createdAt;
 
     private String firstName;
@@ -24,6 +26,7 @@ public class User {
 
     //    optional: null means no image set
     @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private String image;
 
     //    constructor
@@ -37,12 +40,10 @@ public class User {
 
     public User(Long id, String firstName, String lastName, String email,
                 String password, String image, java.time.Instant createdAt) {
-        requireText(email, "Email");
-
-        setFirstName(firstName);
-        setLastName(lastName);
-        this.email = email;
-        setPassword(password);
+        this(firstName, lastName, email, password);
+        this.id = id;
+        this.image = image;
+        this.createdAt = createdAt;
     }
 
     //    auto username from firstname and lastname
