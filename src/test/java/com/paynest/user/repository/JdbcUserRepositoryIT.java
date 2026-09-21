@@ -47,7 +47,7 @@ import com.paynest.user.model.User;
  * real concurrency — which matters from Day-13 onward.)
  */
 @SpringBootTest
-@ActiveProfiles("jdbc-it")
+@ActiveProfiles({"jdbc", "jdbc-it"})
 @Transactional
 class JdbcUserRepositoryIT {
 

@@ -7,6 +7,7 @@ import com.paynest.user.model.User;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.context.annotation.Profile;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -26,6 +27,35 @@ import java.util.Optional;
  * If both were, Spring would fail at <em>startup</em> with
  * {@code NoUniqueBeanDefinitionException} — not at compile time.
  *
+ * <pre>
+ * =========================================================================
+ * DAY-04 STEP 6a — THE PARAGRAPH ABOVE IS NOW OUT OF DATE, AND IT PREDICTED
+ * ITS OWN FAILURE. Read it again: "if both were, Spring would fail at
+ * startup with NoUniqueBeanDefinitionException". There are now THREE
+ * implementations, and this one is eligible ALWAYS.
+ *
+ * "The default" was a fine way to say "the real one" while there was
+ * exactly one real one. It is not a claim that survives a third arrival —
+ * outside the test profile, this bean and JpaUserRepository BOTH match, and
+ * the application will refuse to start.
+ *
+ * Compare Day-03's mirror image: a MISSING `implements UserRepository`
+ * compiled fine and produced NoSuchBeanDefinitionException at startup. Too
+ * few and too many fail the same way, at the same moment. That is the
+ * container earning its keep.
+ *
+ * WHAT TO DO:
+ *   - add @Profile("jdbc") to this class, so it names itself POSITIVELY
+ *     instead of relying on being the leftover
+ *   - fix the paragraph above: it should say all three now name themselves,
+ *     and that being "the default" is what broke
+ *
+ * THE TRANSFERABLE POINT: an implicit default, like a negation, encodes an
+ * assumption about how many alternatives will ever exist. Both are wrong the
+ * first time a new one shows up.
+ * =========================================================================
+ * </pre>
+ *
  * <p>{@code @Repository} is not decoration. Besides registering the bean, it
  * switches on Spring's exception translation, which converts Postgres's
  * {@code PSQLException} (SQLSTATE 23505) into the vendor-neutral
@@ -37,6 +67,7 @@ import java.util.Optional;
  * Day-04 replaces it.
  */
 @Repository
+@Profile("jdbc")
 public class JdbcUserRepository implements UserRepository {
 
     /**
