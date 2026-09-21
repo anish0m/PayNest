@@ -1,33 +1,54 @@
 package com.paynest.user.model;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
-import lombok.AccessLevel;
 
 import java.util.Optional;
 
+@Entity
+@Table(name = "users")
 @Getter
 @Setter
 @ToString(exclude = "password")
 public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    @Column(name = "id")
+    private Long id;
 
     @Setter(AccessLevel.NONE)
-    private Long id;
-    @Setter(AccessLevel.NONE)
+    @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private java.time.Instant createdAt;
 
+    @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
+
+    @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    //    username shall be the local of email
-    private final String email;
+    @Setter(AccessLevel.NONE)
+    @Column(name = "email", nullable = false, length = 255, unique = true, updatable = false)
+    private String email;
+
+    @Column(name = "password", nullable = false, length = 255)
     private String password;
 
-    //    optional: null means no image set
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
+    @Column(name = "image", length = 512)
     private String image;
+
+    protected User() {
+    }
 
     //    constructor
     public User(String firstName, String lastName, String email, String password) {
@@ -77,12 +98,12 @@ public class User {
         this.password = password;
     }
 
-    //    image setter
+    //    image getter
     public Optional<String> getImage() {
         return Optional.ofNullable(image);
     }
 
-    //    image getter
+    //    image setter
     public void setImage(String image) {
         if (image != null && image.isBlank()) {
             throw new IllegalArgumentException("Image cannot be blank");
