@@ -17,7 +17,7 @@ import java.util.Optional;
 @Table(name = "users")
 @Getter
 @Setter
-@ToString(exclude = "password")
+@ToString(exclude = "passwordHash")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,8 +39,8 @@ public class User {
     @Column(name = "email", nullable = false, length = 255, unique = true, updatable = false)
     private String email;
 
-    @Column(name = "password", nullable = false, length = 255)
-    private String password;
+    @Column(name = "password_hash", nullable = false, length = 60)
+    private String passwordHash;
 
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
@@ -51,17 +51,17 @@ public class User {
     }
 
     //    constructor
-    public User(String firstName, String lastName, String email, String password) {
+    public User(String firstName, String lastName, String email, String passwordHash) {
         requireText(email, "Email");
         setFirstName(firstName);
         setLastName(lastName);
         this.email = email;
-        setPassword(password);
+        setPasswordHash(passwordHash);
     }
 
     public User(Long id, String firstName, String lastName, String email,
-                String password, String image, java.time.Instant createdAt) {
-        this(firstName, lastName, email, password);
+                String passwordHash, String image, java.time.Instant createdAt) {
+        this(firstName, lastName, email, passwordHash);
         this.id = id;
         this.image = image;
         this.createdAt = createdAt;
@@ -91,11 +91,11 @@ public class User {
     }
 
     //    password setter
-    public void setPassword(String password) {
-        if (password == null || password.isBlank()) {
+    public void setPasswordHash(String passwordHash) {
+        if (passwordHash == null || passwordHash.isBlank()) {
             throw new IllegalArgumentException("Password cannot be null or blank");
         }
-        this.password = password;
+        this.passwordHash = passwordHash;
     }
 
     //    image getter

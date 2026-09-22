@@ -42,7 +42,7 @@ class UserTest {
     void blankPasswordIsRejected() {
         User user = new User("Anishom", "Frost", "khi0ne@example.com", "Pass1234#");
         assertThrows(IllegalArgumentException.class,
-                () -> user.setPassword(""));
+                () -> user.setPasswordHash(""));
     }
 
     @Test

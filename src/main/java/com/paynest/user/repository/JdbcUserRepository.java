@@ -78,7 +78,7 @@ public class JdbcUserRepository implements UserRepository {
      * in the table becomes load-bearing in Java.
      */
     private static final String COLUMNS =
-            "id, first_name, last_name, email, password, image, created_at";
+            "id, first_name, last_name, email, password_hash, image, created_at";
 
     private final JdbcClient jdbc;
 
@@ -113,12 +113,12 @@ public class JdbcUserRepository implements UserRepository {
     public User save(User user) {
         try {
             return jdbc.sql("""
-                            INSERT INTO users (first_name, last_name, email, password, image)
+                            INSERT INTO users (first_name, last_name, email, password_hash, image)
                             VALUES (?, ?, ?, ?, ?)
                             RETURNING
                             """ + COLUMNS)
                     .params(user.getFirstName(), user.getLastName(), user.getEmail(),
-                            user.getPassword(), user.getImage().orElse(null))
+                            user.getPasswordHash(), user.getImage().orElse(null))
                     .query(JdbcUserRepository::mapRow)
                     .single();
         } catch (DuplicateKeyException e) {
@@ -236,7 +236,7 @@ public class JdbcUserRepository implements UserRepository {
                 rs.getString("first_name"),
                 rs.getString("last_name"),
                 rs.getString("email"),
-                rs.getString("password"),
+                rs.getString("password_hash"),
                 rs.getString("image"),
                 rs.getObject("created_at", java.time.OffsetDateTime.class).toInstant());
     }
