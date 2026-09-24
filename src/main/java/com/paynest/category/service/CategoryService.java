@@ -16,22 +16,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-// =========================================================================
-//  DAY-05, STEP 2.5d — CategoryService.
-// =========================================================================
-//  @Service, constructor injection, two final fields:
-//      SpringDataCategoryRepository categories
-//      TransferCategoryRepository   links
-//
-//  No @Autowired (single constructor). Same as UserService.
-//
-//  ⚠️ NOTE THIS SERVICE TALKS TO TWO REPOSITORIES, and that is the first
-//  time in PayNest. It is fine, and it is the reason the service layer
-//  exists: "tag a transfer" needs the category to be looked up AND the
-//  link to be written, and deciding that those two belong together is a
-//  business decision, not a storage one. Neither repository could own it.
-// =========================================================================
-
+/**
+ * Business rules for categories and for tagging transfers.
+ *
+ * <p>The first service in PayNest to depend on two repositories. That is what
+ * the service layer is for: "tag a transfer" needs the category looked up AND
+ * the link written, and deciding those two belong together is a business
+ * decision, not a storage one. Neither repository could own it.
+ *
+ * <p><b>Known limitation, closes on Day-08:</b> nothing here validates that a
+ * {@code transferId} refers to a real transfer. It cannot — V4 chose Option A
+ * (no FK on {@code transfer_id}) because {@code transactions.transfer_id} is
+ * deliberately not unique, and there is no {@code transfers} table to point at
+ * yet. So this service will happily tag a UUID that corresponds to nothing.
+ */
 @Service
 public class CategoryService {
 
@@ -45,55 +43,17 @@ public class CategoryService {
         this.categories = categories;
         this.links = links;
     }
-// -------------------------------------------------------------------------
-//  CRUD — the four you already know
-// -------------------------------------------------------------------------
-//
-//  create(String name) -> Category
-//      Look up by name first; if present, throw DuplicateCategoryException.
-//      Then categories.save(new Category(name)).
-//
-//      ⚠️ SAME LOOK-THEN-ACT GAP AS register(). Two concurrent requests
-//      both find nothing and both insert; the UNIQUE constraint in V4 is
-//      what actually prevents the duplicate. The check here buys a clean
-//      error message, NOT safety. Fourth appearance of policy vs
-//      guarantee — you should be able to say this one in your sleep by now,
-//      and being able to say it out loud is worth more than the code.
-//
-//  findAll() -> Collection<Category>       categories.findAll()
-//  findByName(String) -> Optional<Category>
-//  getByName(String) -> Category           throws CategoryNotFoundException
-//
-//      Optional for "is this taken?", throwing for "load the one I named".
-//      Absence is not always an error — slice 4's rule, still holding.
-//
-//  rename(String oldName, String newName) -> Category
-//      @Transactional. getByName, then setName. NO save() call under JPA —
-//      dirty checking already scheduled the UPDATE. Write a comment saying
-//      so; it is the thing that looks like a bug and is not.
-//
-//  delete(String name)
-//      categories.deleteByName(name); throw if 0 rows deleted.
-//
-//      ⚠️ AND HERE YOU WILL MEET THE FOREIGN KEY, DELIBERATELY.
-//      Delete a category that is still tagged to a transfer and Postgres
-//      refuses: "update or delete on table categories violates foreign key
-//      constraint on table transfer_categories".
-//
-//      That is DataIntegrityViolationException in Spring terms. DO NOT add
-//      ON DELETE CASCADE to make it go away — cascading here would
-//      silently erase the fact that twelve transfers were allowances.
-//      Catch it and throw something meaningful
-//      (CategoryInUseException -> 409 Conflict), because the world is not
-//      in the state the caller assumed. Exactly the 409-vs-400 line:
-//      the request is fine, the world isn't.
-//
-//      THIS IS A GOOD DEMO. Tag a transfer, try to delete the category,
-//      watch the database refuse. Referential integrity, visible.
-// -------------------------------------------------------------------------
 
-    // CRUD : create
-
+    /**
+     * Creates a category.
+     *
+     * <p>The lookup is a look-then-act and loses the same race as
+     * {@code UserService.register}: two concurrent requests both find nothing
+     * and both insert. The UNIQUE constraint in V4 is what actually prevents the
+     * duplicate — this check buys a clean error message, not safety. The catch
+     * below is what turns the constraint's refusal into the same exception, so
+     * the caller sees one answer either way.
+     */
     public Category create(String name) {
         if (categories.findByName(name).isPresent()) {
             throw new DuplicateCategoryException(name);
@@ -106,23 +66,29 @@ public class CategoryService {
         }
     }
 
-    // CRUD : read
-
     public Collection<Category> findAll() {
         return categories.findAll();
     }
 
+    /** {@code Optional} because absence is a normal answer to "is this taken?". */
     public Optional<Category> findByName(String name) {
         return categories.findByName(name);
     }
 
+    /** Throws, because a caller naming a specific category cannot continue without it. */
     public Category getByName(String name) {
         return categories.findByName(name)
                 .orElseThrow(() -> new CategoryNotFoundException(name));
     }
 
-    // CRUD : update
-
+    /**
+     * Renames a category.
+     *
+     * <p>No {@code save()} call: inside this transaction the entity is managed,
+     * so {@code setName} has already scheduled the UPDATE through dirty
+     * checking. The absence of a write is the thing that looks like a bug and is
+     * not.
+     */
     @Transactional
     public Category rename(String oldName, String newName) {
         if (categories.findByName(newName).isPresent()) {
@@ -135,60 +101,54 @@ public class CategoryService {
         return category;
     }
 
-    // CRUD : delete
-
+    /**
+     * Deletes a category, unless transfers still use it.
+     *
+     * <p>{@code getByName} above already throws if the category is missing, so by
+     * the time {@code deleteByName} runs the row exists. The only remaining
+     * failure is the FOREIGN KEY from V4 refusing to orphan tagged transfers —
+     * which is the database enforcing the rule, not this method.
+     *
+     * <p><b>The {@code flush()} is load-bearing.</b> Without it the DELETE stays
+     * queued until commit, the FK violation surfaces after this method has
+     * returned, and the catch below never runs.
+     *
+     * <p><b>⚠️ The count MUST be taken before the try, not inside the catch.</b>
+     * Once the FK violation fires, PostgreSQL aborts the whole transaction —
+     * SQL state 25P02, <em>"current transaction is aborted, commands ignored
+     * until end of transaction block"</em> — so any query in the catch block
+     * fails with an unrelated error and the caller gets a 500 instead of a 409.
+     *
+     * <p>Third appearance of this rule: Day-03 met 25P02 directly, Day-04's
+     * persona slice hit it when {@code save()}'s catch called
+     * {@code existsByEmail}. <b>The transaction is already dead — read the
+     * exception, do not ask it a question.</b>
+     *
+     * <p>So one extra {@code COUNT(*)} is paid on every delete. That is the
+     * honest price of being able to report the refusal, and a count is cheaper
+     * than loading every UUID to call {@code size()} on it.
+     *
+     * <p>Deliberately no {@code ON DELETE CASCADE}: cascading here would
+     * silently erase the fact that twelve transfers were allowances.
+     */
     @Transactional
     public void delete(String name) {
         Category category = getByName(name);
-        long transferCount = links.findTransfersForCategory(category.getId()).size();
+        long transferCount = links.countTransfersForCategory(category.getId());
 
         try {
-            long deleted = categories.deleteByName(name);
-
-            if (deleted == 0) {
-                throw new CategoryNotFoundException(name);
-            }
-
+            categories.deleteByName(name);
             categories.flush();
         } catch (DataIntegrityViolationException e) {
             throw new CategoryInUseException(name, transferCount);
         }
     }
 
-    // -------------------------------------------------------------------------
-//  THE N:N OPERATIONS
-// -------------------------------------------------------------------------
-//
-//  tag(UUID transferId, String categoryName) -> boolean
-//      getByName(categoryName)  — 404 if the category does not exist,
-//                                 which is right: you cannot tag with
-//                                 something that is not a category
-//      then links.tag(transferId, category.getId())
-//
-//      Returns true if newly tagged, false if it already was. Because of
-//      ON CONFLICT DO NOTHING, calling this twice is safe — say so in a
-//      comment, since idempotency is the property a reader will not assume.
-//
-//  untag(UUID transferId, String categoryName) -> boolean
-//
-//  categoriesFor(UUID transferId) -> List<Category>
-//  transfersIn(String categoryName) -> List<UUID>
-//
-//      Note the asymmetry and why it is honest: one returns entities, the
-//      other returns UUIDs, because Transaction is not an entity until
-//      Day-08. Do not invent a wrapper class to make them look symmetric.
-//
-//  summary() -> the per-category counts
-//
-//  ⚠️ NOT VALIDATED HERE: that transferId refers to a real transfer.
-//  It cannot be, today — Option A in V4 means there is no FK on
-//  transfer_id, and there is no transfers table to check against. So this
-//  service will happily tag a UUID that corresponds to nothing.
-//
-//  WRITE THAT DOWN AS A COMMENT. It is a known, dated limitation
-//  (closes on Day-08), not an oversight — and the difference between those
-//  two is the entire point of how this project records debt.
-// -------------------------------------------------------------------------
+    /**
+     * Tags a transfer. Safe to call repeatedly — the link table absorbs repeats.
+     *
+     * @return true if this call created the link, false if it was already there
+     */
     public boolean tag(UUID transferId, String categoryName) {
         Category category = getByName(categoryName);
         return links.tag(transferId, category.getId());
@@ -203,6 +163,11 @@ public class CategoryService {
         return links.findCategoriesForTransfer(transferId);
     }
 
+    /**
+     * The asymmetry with {@link #categoriesFor} is honest, not an oversight: one
+     * returns entities, the other UUIDs, because Transaction is not an entity
+     * until Day-08.
+     */
     public List<UUID> transfersIn(String categoryName) {
         Category category = getByName(categoryName);
         return links.findTransfersForCategory(category.getId());
