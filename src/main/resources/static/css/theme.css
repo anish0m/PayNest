@@ -1,0 +1,87 @@
+/* =========================================================
+   PayNest — theme.css
+   Periwinkle color system (Blue / Ash / Pink) + neutrals
+   and semantic status colors.
+
+   Usage: import this file once, globally.
+     @import "./theme.css";
+   or in an HTML head:
+     <link rel="stylesheet" href="theme.css">
+
+   Every color is a CSS custom property, so components
+   reference them as var(--token-name) rather than hardcoding
+   hex values. See PALETTE.md for what to use where.
+   ========================================================= */
+
+:root {
+  /* ---------- Periwinkle Blue ----------
+     Primary brand. Actions, links, focus rings, primary buttons. */
+  --pw-blue-900: #22245C;
+  --pw-blue-700: #4550C4;
+  --pw-blue-500: #6C7CE8; /* primary */
+  --pw-blue-300: #A6B0F2;
+  --pw-blue-100: #E4E7FC;
+
+  /* ---------- Periwinkle Ash ----------
+     Secondary UI. Borders, dividers, muted/disabled states,
+     secondary text and buttons. */
+  --pw-ash-900: #35354A;
+  --pw-ash-700: #5C5B75;
+  --pw-ash-500: #9796AE;
+  --pw-ash-300: #C5C4D3;
+  --pw-ash-100: #ECEBF2;
+
+  /* ---------- Periwinkle Pink ----------
+     Highlights. Badges, tags, celebratory or promotional
+     moments. Used sparingly. */
+  --pw-pink-900: #7A3F72;
+  --pw-pink-700: #B472A8;
+  --pw-pink-500: #D9A8D4;
+  --pw-pink-300: #EBCDE8;
+  --pw-pink-100: #F8ECF6;
+
+  /* ---------- Neutrals ---------- */
+  --ink: #2B2A4A;        /* headings, primary text */
+  --ink-soft: #55536E;   /* secondary/body text */
+  --cloud: #F7F6FB;      /* app/page background */
+  --paper: #FFFFFF;      /* card/surface background */
+  --line: #E3E1EE;       /* hairline borders, dividers */
+
+  /* ---------- Status (deliberately outside the periwinkle
+     family, so money states are never ambiguous) ---------- */
+  --mint: #3FAE83;       /* success — money received, transfer OK */
+  --mint-bg: #E4F5EC;
+  --coral: #E2645C;      /* error — failed transfer, validation error */
+  --coral-bg: #FCE7E5;
+  --amber: #D69A3C;      /* warning/pending — scheduled, processing */
+  --amber-bg: #FBF0DD;
+
+  /* ---------- Typography (optional, matches the palette page) ---------- */
+  --font-display: 'Sora', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ---------- Dark mode ----------
+   Overrides the neutral surfaces only; brand and status
+   tokens stay the same so components don't need separate
+   dark-mode variants for color, only for background/text. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cloud: #1B1A2E;
+    --paper: #24233C;
+    --ink: #EDEBFA;
+    --ink-soft: #B4B2CC;
+    --line: #34324E;
+  }
+}
+
+/* Force light or dark regardless of system setting by setting
+   data-theme="light" or data-theme="dark" on <html> or <body>. */
+:root[data-theme="dark"] {
+  --cloud: #1B1A2E;
+  --paper: #24233C;
+  --ink: #EDEBFA;
+  --ink-soft: #B4B2CC;
+  --line: #34324E;
+}
