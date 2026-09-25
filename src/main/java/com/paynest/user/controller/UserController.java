@@ -44,11 +44,7 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
-        User savedUser = service.register(new User(
-                request.firstName(),
-                request.lastName(),
-                request.email(),
-                request.password()));
+        User savedUser = service.register(request);
 
         URI location = URI.create("/users/" + savedUser.getEmail());
         return ResponseEntity.created(location).body(UserResponse.from(savedUser));

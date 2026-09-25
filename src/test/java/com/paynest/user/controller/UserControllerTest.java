@@ -4,7 +4,10 @@ import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.model.User;
 import com.paynest.user.service.UserService;
+import com.paynest.user.dto.CreateUserRequest;
+
 import org.junit.jupiter.api.Test;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -16,6 +19,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -57,7 +61,7 @@ class UserControllerTest {
 
     @Test
     void signupReturns201WithLocation() throws Exception {
-        when(service.register(any(User.class))).thenReturn(anishom());
+        when(service.register(any(CreateUserRequest.class))).thenReturn(anishom());
 
         mockMvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -73,7 +77,7 @@ class UserControllerTest {
     // there in the JSON. Absence has to be asserted on purpose.
     @Test
     void responseNeverContainsThePassword() throws Exception {
-        when(service.register(any(User.class))).thenReturn(anishom());
+        when(service.register(any(CreateUserRequest.class))).thenReturn(anishom());
 
         mockMvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -86,7 +90,7 @@ class UserControllerTest {
     // real service does. This verifies the @ExceptionHandler routing table.
     @Test
     void duplicateEmailReturns409() throws Exception {
-        when(service.register(any(User.class)))
+        when(service.register(any(CreateUserRequest.class)))
                 .thenThrow(new DuplicateEmailException("khi0ne@example.com"));
 
         mockMvc.perform(post("/users")
