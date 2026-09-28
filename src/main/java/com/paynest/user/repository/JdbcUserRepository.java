@@ -126,6 +126,23 @@ public class JdbcUserRepository implements UserRepository {
         }
     }
 
+    @Override
+    public User update(User user) {
+        int rows = jdbc.sql("""
+                    UPDATE users
+                       SET first_name = ?, last_name = ?, image = ?
+                     WHERE email = ?
+                    """)
+                .params(user.getFirstName(), user.getLastName(),
+                        user.getImage().orElse(null), user.getEmail())
+                .update();
+
+        if (rows == 0) {
+            throw new UserNotFoundException(user.getEmail());
+        }
+        return getByEmail(user.getEmail());
+    }
+
     /**
      * Finds a user, or empty if there is none.
      *

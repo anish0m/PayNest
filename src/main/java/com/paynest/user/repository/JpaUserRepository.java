@@ -54,6 +54,19 @@ public class JpaUserRepository implements UserRepository {
     }
 
     @Override
+    @Transactional
+    public User update(User user) {
+        User managed = users.findById(user.getId())
+                .orElseThrow(() -> new UserNotFoundException(user.getEmail()));
+
+        managed.setFirstName(user.getFirstName());
+        managed.setLastName(user.getLastName());
+        managed.setImage(user.getImage().orElse(null));
+
+        return managed;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<User> findByEmail(String email) {
         return users.findByEmail(email);

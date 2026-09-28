@@ -27,6 +27,15 @@ public class InMemoryUserRepository implements UserRepository {
         return user;
     }
 
+    @Override
+    public User update(User user) {
+        if (!usersByEmail.containsKey(user.getEmail())) {
+            throw new UserNotFoundException(user.getEmail());
+        }
+        usersByEmail.put(user.getEmail(), user);
+        return user;
+    }
+
     public Optional<User> findByEmail(String email) {
         return Optional.ofNullable(usersByEmail.get(email));
     }
