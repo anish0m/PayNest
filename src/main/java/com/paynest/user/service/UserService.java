@@ -4,9 +4,11 @@ import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
 import com.paynest.user.dto.CreateUserRequest;
+import com.paynest.user.dto.UpdateProfileRequest;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -66,6 +68,31 @@ public class UserService {
                 request.lastName(),
                 request.email(),
                 hash));
+    }
+
+    /**
+     * Edits an existing user's profile.
+     *
+     * <p>Loads the user via {@code getByEmail} (throws {@code UserNotFoundException}
+     * if absent — a caller naming a specific email cannot continue without that
+     * row existing), mutates it via the model's validating setters rather than
+     * constructing a new {@code User}, then persists via {@code repository.update},
+     * not {@code save} — {@code save} means INSERT and is wrong for an existing row.
+     *
+     * <p>{@code request.image()} may be {@code null}: {@code UpdateProfileRequest}
+     * deliberately omits {@code @NotBlank} on it, since leaving {@code image} out of
+     * the JSON body is how a caller expresses "clear it," and {@code User.setImage}
+     * already treats {@code null} as valid.
+     */
+    @Transactional
+    public User updateProfile(String email, UpdateProfileRequest request) {
+        User user = repository.getByEmail(email);
+
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+        user.setImage(request.image());
+
+        return repository.update(user);
     }
 
     public Optional<User> findByEmail(String email) {

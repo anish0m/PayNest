@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.paynest.user.dto.UpdateProfileRequest;
+import org.springframework.web.bind.annotation.PutMapping;
+
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +65,28 @@ public class UserController {
     @GetMapping("/{email}")
     public UserResponse findByEmail(@PathVariable String email) {
         return UserResponse.from(service.getByEmail(email));
+    }
+
+    /**
+     * Edits a user's profile. {@code PUT /users/{email}}.
+     *
+     * <p>PUT, not POST: this replaces the complete editable state of an existing
+     * resource and is idempotent — sending the identical body twice leaves the
+     * server in the same state as sending it once.
+     *
+     * <p>200, not 201 or 204: nothing was created, and returning the profile
+     * saves the caller a follow-up GET and exposes {@code getUsername()}, which
+     * they cannot derive themselves.
+     *
+     * <p>{@code email} comes from the path, not the body — {@code UpdateProfileRequest}
+     * cannot carry one anyway, so there is no value that could disagree with it.
+     */
+    @PutMapping("/{email}")
+    public UserResponse updateProfile(
+            @PathVariable String email,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        return UserResponse.from(service.updateProfile(email, request));
     }
 
     //    delete
