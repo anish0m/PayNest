@@ -116,39 +116,4 @@ public class CategoryController {
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.notFound().build();
     }
-
-    @ExceptionHandler(CategoryNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(CategoryNotFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", e.getMessage()));
-    }
-
-    @ExceptionHandler(DuplicateCategoryException.class)
-    public ResponseEntity<Map<String, String>> handleDuplicate(DuplicateCategoryException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", e.getMessage()));
-    }
-
-    @ExceptionHandler(CategoryInUseException.class)
-    public ResponseEntity<Map<String, Object>> handleInUse(CategoryInUseException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(
-                        "error", e.getMessage(),
-                        "name", e.getName(),
-                        "transferCount", e.getTransferCount()));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidation(
-            MethodArgumentNotValidException e) {
-        Map<String, String> errors = new LinkedHashMap<>();
-
-        e.getBindingResult().getFieldErrors()
-                .forEach(error -> errors.putIfAbsent(
-                        error.getField(),
-                        error.getDefaultMessage()));
-
-        return ResponseEntity.badRequest().body(errors);
-    }
-
 }

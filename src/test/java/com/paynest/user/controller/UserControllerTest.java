@@ -97,7 +97,7 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_JSON))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").exists());
+                .andExpect(jsonPath("$.detail").exists());
     }
 
     // The collection exists and is empty. 200 [], never 404.

@@ -98,38 +98,10 @@ public class UserController {
 
 //    exceptions
 
-    //    409
-    @ExceptionHandler(DuplicateEmailException.class)
-    public ResponseEntity<Map<String, String>> handleDuplicate(DuplicateEmailException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", e.getMessage()));
-    }
-
-    //    404
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(UserNotFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", e.getMessage()));
-    }
-
     //    400
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleBadInput(IllegalArgumentException e) {
         return ResponseEntity.badRequest()
                 .body(Map.of("error", e.getMessage()));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidation(
-            MethodArgumentNotValidException e) {
-        Map<String, String> errors = new LinkedHashMap<>();
-
-        e.getBindingResult()
-                .getFieldErrors()
-                .forEach(error -> errors.putIfAbsent(
-                        error.getField(),
-                        error.getDefaultMessage()));
-
-        return ResponseEntity.badRequest().body(errors);
     }
 }
