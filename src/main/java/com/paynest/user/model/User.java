@@ -47,8 +47,13 @@ public class User {
     @Column(name = "image", length = 512)
     private String image;
 
+    @Column(name = "role", nullable = false, length = 20)
+    private String role;
+
     protected User() {
     }
+
+    this.role = "USER";
 
     //    constructor
     public User(String firstName, String lastName, String email, String passwordHash) {
@@ -60,10 +65,11 @@ public class User {
     }
 
     public User(Long id, String firstName, String lastName, String email,
-                String passwordHash, String image, java.time.Instant createdAt) {
+                String passwordHash, String image, String role, java.time.Instant createdAt) {
         this(firstName, lastName, email, passwordHash);
         this.id = id;
         this.image = image;
+        this.role = role;
         this.createdAt = createdAt;
     }
 

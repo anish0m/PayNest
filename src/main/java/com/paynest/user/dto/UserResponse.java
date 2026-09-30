@@ -10,7 +10,8 @@ public record UserResponse(
         String firstName,
         String lastName,
         String username,
-        String image) {
+        String image,
+        String role) {
 
     // The one place a User becomes a UserResponse.
     public static UserResponse from(User user) {
@@ -22,6 +23,7 @@ public record UserResponse(
                 user.getFirstName(),
                 user.getLastName(),
                 user.getUsername(),
-                user.getImage().orElse(null));
+                user.getImage().orElse(null),
+                user.getRole());
     }
 }
