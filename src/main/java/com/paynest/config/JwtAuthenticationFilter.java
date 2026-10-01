@@ -28,10 +28,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository repository;
+    private final TokenDenyList denyList;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserRepository repository) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepository repository, TokenDenyList denyList) {
         this.jwtService = jwtService;
         this.repository = repository;
+        this.denyList = denyList;
     }
 
     @Override
@@ -50,6 +52,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = header.substring(PREFIX.length());
 
         if (!jwtService.isValid(token)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        if (denyList.isDenied(token)) {
             chain.doFilter(request, response);
             return;
         }

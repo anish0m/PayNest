@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import com.paynest.user.dto.UpdateProfileRequest;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -89,7 +90,13 @@ public class UserController {
         return UserResponse.from(service.updateProfile(email, request));
     }
 
-    //    delete
+
+    @GetMapping("/me")
+    public UserResponse me(java.security.Principal principal) {
+        return UserResponse.from(service.getByEmail(principal.getName()));
+    }
+
+    @PreAuthorize("#email == authentication.name or hasRole('ADMIN')")
     @DeleteMapping("/{email}")
     public ResponseEntity<Void> delete(@PathVariable String email) {
         service.deleteByEmail(email);
