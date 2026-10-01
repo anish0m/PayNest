@@ -5,6 +5,8 @@ import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
 import com.paynest.user.dto.CreateUserRequest;
 import com.paynest.user.dto.UpdateProfileRequest;
+import com.paynest.user.dto.LoginRequest;
+import com.paynest.user.exception.InvalidCredentialsException;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,9 @@ public class UserService {
      * {@code SecurityConfig}.
      */
     private final PasswordEncoder passwordEncoder;
+
+    private static final String DUMMY_HASH =
+            "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5L4mfP/EMDT1lqGKgnJKpgJH4pOb2";
 
     public UserService(UserRepository repository, PasswordEncoder passwordEncoder) {
         this.repository = repository;
@@ -93,6 +98,22 @@ public class UserService {
         user.setImage(request.image());
 
         return repository.update(user);
+    }
+
+    public User login(LoginRequest request) {
+        Optional<User> maybeUser = repository.findByEmail(request.email());
+
+        if (maybeUser.isEmpty()) {
+            passwordEncoder.matches(request.password(), DUMMY_HASH);
+            throw new InvalidCredentialsException();
+        }
+
+        User user = maybeUser.get();
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        return user;
     }
 
     public Optional<User> findByEmail(String email) {
