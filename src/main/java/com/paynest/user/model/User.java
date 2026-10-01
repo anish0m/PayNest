@@ -53,8 +53,6 @@ public class User {
     protected User() {
     }
 
-    this.role = "USER";
-
     //    constructor
     public User(String firstName, String lastName, String email, String passwordHash) {
         requireText(email, "Email");
@@ -62,6 +60,7 @@ public class User {
         setLastName(lastName);
         this.email = email;
         setPasswordHash(passwordHash);
+        this.role = "USER";
     }
 
     public User(Long id, String firstName, String lastName, String email,
