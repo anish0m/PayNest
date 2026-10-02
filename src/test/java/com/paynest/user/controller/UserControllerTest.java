@@ -1,14 +1,18 @@
 package com.paynest.user.controller;
 
+import com.paynest.config.JwtService;
+import com.paynest.config.TokenDenyList;
 import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.model.User;
+import com.paynest.user.repository.UserRepository;
 import com.paynest.user.service.UserService;
 import com.paynest.user.dto.CreateUserRequest;
 
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -28,16 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// @WebMvcTest boots ONLY the web layer — this controller, Jackson, the
-// exception handlers. Not the service, not the repository.
-//
-// @MockitoBean supplies a fake UserService, so a test can say "the service
-// throws" without first registering a real user. What is under test is the
-// TRANSLATION, not the business logic.
-//
-// MockMvc sends requests through real Spring MVC dispatch — routing, binding,
-// JSON, exception handling — without opening a TCP socket.
 @WebMvcTest(UserController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class UserControllerTest {
 
     @Autowired
@@ -45,6 +41,15 @@ class UserControllerTest {
 
     @MockitoBean
     private UserService service;
+
+    @MockitoBean
+    private JwtService jwtService;
+
+    @MockitoBean
+    private TokenDenyList tokenDenyList;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     private User anishom() {
         return new User("Anishom", "Frost", "khi0ne@example.com", "Pass1234#");
