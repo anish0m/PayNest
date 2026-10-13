@@ -18,6 +18,8 @@ import lombok.ToString;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import com.paynest.wallet.exception.WalletFrozenException;
+
 @Entity
 @Table(name = "wallets")
 @Getter
@@ -54,5 +56,17 @@ public class Wallet {
         this.user = user;
         this.balance = BigDecimal.ZERO;
         this.status = WalletStatus.ACTIVE;
+    }
+
+    public void changeStatus(WalletStatus newStatus) {
+        if (newStatus == null) {
+            throw new IllegalArgumentException("Wallet status cannot be null");
+        }
+
+        if (this.status == WalletStatus.CLOSED && newStatus != WalletStatus.CLOSED) {
+            throw new WalletFrozenException(id, status);
+        }
+
+        this.status = newStatus;
     }
 }

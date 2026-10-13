@@ -13,6 +13,7 @@ import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.exception.InvalidCredentialsException;
 import com.paynest.wallet.exception.WalletNotFoundException;
+import com.paynest.wallet.exception.WalletFrozenException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -33,6 +34,16 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, e.getMessage());
         problem.setTitle("Not Found");
+        return problem;
+    }
+
+    @ExceptionHandler(WalletFrozenException.class)
+    public ProblemDetail handleWalletFrozen(WalletFrozenException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, e.getMessage());
+        problem.setTitle("Conflict");
+        problem.setProperty("walletId", e.getWalletId());
+        problem.setProperty("walletStatus", e.getStatus());
         return problem;
     }
 

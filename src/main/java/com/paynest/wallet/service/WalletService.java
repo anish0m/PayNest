@@ -5,6 +5,9 @@ import com.paynest.user.repository.UserRepository;
 import com.paynest.wallet.exception.WalletNotFoundException;
 import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.repository.WalletRepository;
+import com.paynest.wallet.exception.WalletFrozenException;
+import com.paynest.wallet.model.WalletStatus;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,5 +28,18 @@ public class WalletService {
 
         return wallets.findByUserId(user.getId())
                 .orElseThrow(() -> new WalletNotFoundException(email));
+    }
+
+    private void assertMovementAllowed(Wallet wallet) {
+        if (!wallet.getStatus().allowsMovement()) {
+            throw new WalletFrozenException(wallet.getId(), wallet.getStatus());
+        }
+    }
+
+    @Transactional
+    public Wallet updateStatus(String email, WalletStatus newStatus) {
+        Wallet wallet = getByEmail(email);
+        wallet.changeStatus(newStatus);
+        return wallet;
     }
 }
