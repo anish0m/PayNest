@@ -12,6 +12,7 @@ import com.paynest.category.exception.DuplicateCategoryException;
 import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.exception.InvalidCredentialsException;
+import com.paynest.wallet.exception.WalletNotFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,6 +22,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleUserNotFound(UserNotFoundException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, e.getMessage());
+        problem.setTitle("Not Found");
+        return problem;
+    }
+
+    @ExceptionHandler(WalletNotFoundException.class)
+    public ProblemDetail handleWalletNotFound(WalletNotFoundException e) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, e.getMessage());
         problem.setTitle("Not Found");
