@@ -65,6 +65,22 @@ public class UserService {
      * test). Here, because this is the one method that knows a signup is
      * happening — exactly when a plaintext password exists, and the last
      * moment it may.
+     *
+     * <p>Registration also creates the user's wallet through
+     * {@link WalletService#createFor(User)}. The saved {@link User} is passed,
+     * not the newly constructed one, because the database assigns the id during
+     * INSERT and the wallet needs that id for its foreign key.
+     *
+     * <p>This method is transactional because signup is now two writes: the user
+     * row and the wallet row. They must commit together or roll back together;
+     * otherwise a failed wallet insert would leave behind a user who can never
+     * hold money. Spring's default propagation, REQUIRED, makes the repository
+     * transaction join this boundary instead of committing the user independently.
+     *
+     * <p>UserService calls WalletService rather than WalletRepository so wallet
+     * creation remains in the wallet package. There is no pre-check for an
+     * existing wallet here: a brand-new user cannot already have one, and V2's
+     * UNIQUE constraint on wallets.user_id is the real guarantee.
      */
     @Transactional
     public User register(CreateUserRequest request) {

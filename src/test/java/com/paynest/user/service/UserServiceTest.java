@@ -14,6 +14,9 @@ import com.paynest.user.dto.CreateUserRequest;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.repository.InMemoryUserRepository;
 import com.paynest.user.exception.DuplicateEmailException;
+import com.paynest.user.model.User;
+import com.paynest.wallet.model.Wallet;
+import com.paynest.wallet.service.WalletService;
 
 class UserServiceTest {
 
@@ -22,8 +25,9 @@ class UserServiceTest {
     // that is the dated debt recorded in SecurityConfig, paid deliberately
     // rather than testing a configuration that does not ship.
     private final PasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final RecordingWalletService wallets = new RecordingWalletService();
     private final UserService service =
-            new UserService(new InMemoryUserRepository(), encoder);
+            new UserService(new InMemoryUserRepository(), encoder, wallets);
 
     private CreateUserRequest anishom() {
         return new CreateUserRequest(
@@ -117,5 +121,46 @@ class UserServiceTest {
     void deletingAMissingUserThrows() {
         assertThrows(UserNotFoundException.class, () -> service.deleteByEmail("missing@example.com"));
         assertEquals(0, service.count());
+    }
+
+    @Test
+    void registeringAlsoCreatesAWallet() {
+        service.register(anishom());
+
+        assertEquals(1, wallets.createForCalls);
+        assertEquals("khi0ne@example.com", wallets.lastUser.getEmail());
+    }
+
+    @Test
+    void registerPropagatesWalletCreationFailure() {
+        wallets.failOnCreate = true;
+
+        assertThrows(IllegalStateException.class,
+                () -> service.register(anishom()));
+    }
+
+
+    static class RecordingWalletService extends WalletService {
+        int createForCalls = 0;
+        boolean failOnCreate = false;
+
+        User lastUser;
+
+        RecordingWalletService() {
+            // Safe because this fake overrides every method this test calls.
+            super(null, null);
+        }
+
+        @Override
+        public Wallet createFor(User user) {
+            createForCalls++;
+            lastUser = user;
+
+            if (failOnCreate) {
+                throw new IllegalStateException("wallet creation failed");
+            }
+
+            return new Wallet(user);
+        }
     }
 }
