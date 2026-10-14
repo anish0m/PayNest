@@ -1,0 +1,28 @@
+/*
+ * PayNest — only what Bootstrap 5.3 cannot do.
+ * Colours come from Bootstrap variables so data-bs-theme swaps them;
+ * never hardcode a hex here.
+ */
+
+/* Money: digits line up in columns. */
+.money,
+.table td.amount {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The balance is the number users re-read: largest type on the page. */
+.balance {
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+/* Coloured text on the page background uses the *-text-emphasis family,
+   which is the one that changes in dark mode. Always paired with a sign. */
+.amount-in  { color: var(--bs-success-text-emphasis); }
+.amount-out { color: var(--bs-danger-text-emphasis); }
+
+/* Theme toggle: show the icon for the theme you would switch to. */
+[data-bs-theme="light"] .theme-icon-light,
+[data-bs-theme="dark"]  .theme-icon-dark { display: none; }
