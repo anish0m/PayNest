@@ -8,6 +8,8 @@ import com.paynest.user.dto.UpdateProfileRequest;
 import com.paynest.user.dto.LoginRequest;
 import com.paynest.user.exception.InvalidCredentialsException;
 
+import com.paynest.wallet.service.WalletService;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,12 +34,15 @@ public class UserService {
      */
     private final PasswordEncoder passwordEncoder;
 
+    private final WalletService wallets;
+
     private static final String DUMMY_HASH =
             "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5L4mfP/EMDT1lqGKgnJKpgJH4pOb2";
 
-    public UserService(UserRepository repository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, WalletService wallets) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.wallets = wallets;
     }
 
     /**
@@ -61,6 +66,7 @@ public class UserService {
      * happening — exactly when a plaintext password exists, and the last
      * moment it may.
      */
+    @Transactional
     public User register(CreateUserRequest request) {
         if (repository.findByEmail(request.email()).isPresent()) {
             throw new DuplicateEmailException(request.email());
@@ -68,11 +74,15 @@ public class UserService {
 
         String hash = passwordEncoder.encode(request.password());
 
-        return repository.save(new User(
+        User saved = repository.save(new User(
                 request.firstName(),
                 request.lastName(),
                 request.email(),
                 hash));
+
+        wallets.createFor(saved);
+
+        return saved;
     }
 
     /**

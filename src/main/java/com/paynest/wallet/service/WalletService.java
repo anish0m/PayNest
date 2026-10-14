@@ -52,4 +52,9 @@ public class WalletService {
         wallet.credit(amount);
         return wallet;
     }
+
+    @Transactional
+    public Wallet createFor(User user) {
+        return wallets.save(new Wallet(user));
+    }
 }
