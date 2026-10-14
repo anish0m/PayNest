@@ -69,4 +69,16 @@ public class Wallet {
 
         this.status = newStatus;
     }
+
+    public void credit(BigDecimal amount) {
+        if (amount == null) {
+            throw new IllegalArgumentException("Amount cannot be null");
+        }
+
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
+        }
+
+        this.balance = this.balance.add(amount);
+    }
 }

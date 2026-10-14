@@ -11,6 +11,8 @@ import com.paynest.wallet.model.WalletStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+
 @Service
 public class WalletService {
 
@@ -40,6 +42,14 @@ public class WalletService {
     public Wallet updateStatus(String email, WalletStatus newStatus) {
         Wallet wallet = getByEmail(email);
         wallet.changeStatus(newStatus);
+        return wallet;
+    }
+
+    @Transactional
+    public Wallet deposit(String email, BigDecimal amount) {
+        Wallet wallet = getByEmail(email);
+        assertMovementAllowed(wallet);
+        wallet.credit(amount);
         return wallet;
     }
 }
