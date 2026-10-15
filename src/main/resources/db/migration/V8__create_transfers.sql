@@ -1,0 +1,624 @@
+-- ===========================================================================
+--  DAY-08, STEP 1 — V8: the `transfers` table. A debt from Day-04 coming due.
+--
+--  THIS FILE HOLDS SUB-STEPS 1(i) AND 1(ii).
+--
+--  ORDER OF WORK FOR THE WHOLE OF STEP 1
+--  -------------------------------------
+--    1(0)    ⚠️ FIRST — repair the Flyway history. See the box below.
+--    1(i)    THIS FILE   CREATE TABLE transfers
+--    1(ii)   THIS FILE   COMMENT ON TABLE/COLUMN
+--    1(iii)  TransferStatus.java   the enum + its query methods
+--    1(iv)   Transfer.java         the entity
+--    1(v)    verify with psql      (NOT the test suite — see the end of 1(ii))
+--
+--  Unlike step 0, nothing here breaks the build mid-way. 1(i) and 1(ii) are
+--  additive SQL; 1(iii) and 1(iv) are new files nothing imports yet.
+--
+--
+--  ===========================================================================
+--  ⚠️⚠️ STEP 1(0) — DO THIS BEFORE WRITING ANY SQL BELOW. My fault, not yours.
+--  ===========================================================================
+--  I created this file as comments only, then ran `./mvnw test` to check the
+--  suite still passed. It did (74/74) — and in passing, Flyway APPLIED THIS
+--  FILE:
+--
+--      DbMigrate : Migrating schema "public" to version "8 - create transfers"
+--
+--  An all-comments migration is perfectly valid SQL: zero statements, runs
+--  fine, gets recorded as success. I verified what it left behind:
+--
+--      paynest_test=> SELECT version, description, success, checksum
+--                       FROM flyway_schema_history WHERE version='8';
+--       version |   description    | success |  checksum
+--      ---------+------------------+---------+-------------
+--       8       | create transfers | t       | -326884181
+--
+--  (The dev database `paynest` has no row — only the test DB was touched,
+--  because only the ITs boot Flyway.)
+--
+--  WHY THAT BITES YOU THE MOMENT YOU WRITE 1(i): Flyway stores a CHECKSUM of
+--  each applied file and re-checks it at every startup. Add the CREATE TABLE
+--  and the checksum changes, so the next boot fails with:
+--
+--      FlywayValidateException: Migration checksum mismatch for migration
+--      version 8 ... Applied to database : -326884181 / Resolved locally : ...
+--
+--  That is Flyway working correctly — it is refusing to let an already-applied
+--  migration be edited underneath it, because in a real deployment other
+--  databases have run the OLD version of this file and would now silently
+--  disagree with yours.
+--
+--  YOUR FIX — one of two, and the choice is about which database:
+--
+--    (A) Delete the history row in the TEST database, then let the suite
+--        re-apply the real V8:
+--
+--            DELETE FROM flyway_schema_history WHERE version = '8';
+--
+--        ⚠️ `paynest_test` ONLY. Check your psql prompt says paynest_test
+--        before pressing enter — this is exactly the near-miss the
+--        it-profile-must-target-test-db rule exists for. Nothing of value
+--        lives in the test DB; it is rebuilt by migrations.
+--
+--        Then `./mvnw test` re-runs V8 with your real SQL. Verify it applied
+--        with a NEW checksum, not that it merely passed.
+--
+--    (B) `./mvnw flyway:repair` — Flyway's own tool for exactly this: it
+--        rewrites the checksum of applied migrations to match the files.
+--        Cleaner in principle, needs the plugin configured with the right
+--        datasource, and it is worth knowing it exists.
+--
+--  I would take (A): one statement, against a throwaway database, and you
+--  see the row disappear and come back.
+--
+--  THE TRANSFERABLE LESSON, which is the real reason this box is long:
+--  **running the test suite is not a read-only act.** It boots Flyway, which
+--  writes to a database. I ran it to verify an unrelated thing and changed
+--  state that then constrained the next edit. Before running a suite that
+--  owns migrations, know what it will write — and after adding a migration
+--  file, check `flyway_schema_history` rather than assuming "it is only
+--  comments, nothing happened."
+--
+--
+--  ---------------------------------------------------------------------------
+--  ⚠️ 1(0) IS STILL OUTSTANDING — this is the 20-error suite failure.
+--  ---------------------------------------------------------------------------
+--  You wrote 1(i)-1(iv) but not 1(0), so the suite now fails:
+--
+--      Tests run: 74, Failures: 0, Errors: 20
+--      Caused by: FlywayValidateException: Validate failed: Migrations have
+--                 failed validation
+--      Caused by: BeanCreationException ... 'flywayInitializer'
+--
+--  ⚠️ NOTE WHAT IS AND IS NOT BROKEN. Your SQL and your entity are fine. I
+--  checked the current state:
+--
+--      paynest_test : version 8, checksum -326884181   <- the EMPTY file's
+--      paynest_test : no `transfers` table
+--      paynest      : no version 8 row, no `transfers` table
+--
+--  So the test DB believes V8 already ran, and the file it checksummed had
+--  zero statements. Flyway compares that stored checksum against the file on
+--  disk, sees they differ, and refuses to start. That refusal is correct
+--  behaviour — the whole point of the checksum is that an applied migration
+--  must not change underneath you.
+--
+--  WHICH FAILS, AND WHY THAT GROUPING IS THE DIAGNOSIS:
+--      WalletRepositoryIT       8 errors
+--      JdbcUserRepositoryIT     5 errors
+--      JpaUserRepositoryIT      7 errors   = 20, every DB-backed IT
+--      WalletServiceTest        4 PASS
+--      WalletTest / UserTest    PASS       = every pure unit test
+--
+--  Only the tests that boot a Spring context fail, and they fail in bean
+--  creation, before a single assertion runs. A failure that is total within
+--  one category and absent from another is infrastructure, not logic — if
+--  your entity were wrong, `WalletServiceTest` would not care either, but
+--  the errors would name a column rather than Flyway.
+--
+--  YOUR FIX — two statements:
+--
+--      -- 1. In paynest_test ONLY:
+--      DELETE FROM flyway_schema_history WHERE version = '8';
+--
+--      -- 2. Then re-run the suite; Flyway re-applies V8 with your real SQL:
+--      ./mvnw test
+--
+--  ⚠️ CHECK THE DATABASE FIRST. In IntelliJ's console that means the data
+--  source dropdown says `paynest_test`; in psql it means the prompt does.
+--  `paynest` (dev) has no version-8 row at all, so if your DELETE reports
+--  `DELETE 0` you are in the wrong database — and `DELETE 0` reads exactly
+--  like success if you are not watching for it.
+--
+--  EXPECT AFTERWARDS: 74/74. And note what that run newly proves, which no
+--  earlier run could: `ddl-auto=validate` compares `Transfer` against the
+--  real `transfers` table on every @SpringBootTest. Until now the context
+--  died at Flyway, BEFORE Hibernate got to look — so the entity has never
+--  actually been validated. A green suite here is the first evidence that
+--  the seven @Column names, types and nullability match V8.
+--
+--  (I compared them by eye and they line up. That is worth exactly as much
+--  as any other unverified claim — the run is what settles it.)
+--
+--  ⚠️ THEN CHECK THE NEW CHECKSUM, do not just accept BUILD SUCCESS:
+--
+--      SELECT version, description, success, checksum
+--        FROM flyway_schema_history WHERE version = '8';
+--
+--  It must be present, success = t, and a checksum that is NOT -326884181.
+--  Same value means the empty file ran again and you deleted nothing.
+--
+--  ⚠️ AND THE DEV DATABASE IS STILL UNMIGRATED. `paynest` has no `transfers`
+--  table, because only the ITs boot Flyway against the test DB. 1(v)'s psql
+--  checks are meant to run against DEV — so boot the app once
+--  (`./mvnw spring-boot:run`) to apply V8 there before doing them, or you
+--  will be querying a table that does not exist.
+--  ---------------------------------------------------------------------------
+--
+--
+--  ---------------------------------------------------------------------------
+--  ✅ 1(0) DONE — verified 15 Oct 2026. And here is what it proved.
+--  ---------------------------------------------------------------------------
+--      DELETE 1                      <- right database; DELETE 0 would have
+--                                       meant `paynest`, and read like success
+--      Successfully validated 8 migrations
+--      Current version of schema "public": 7
+--      Migrating schema "public" to version "8 - create transfers"
+--      Successfully applied 1 migration ... now at version v8
+--      Tests run: 74, Failures: 0, Errors: 0     BUILD SUCCESS
+--
+--  Checked the three things the box above says not to take on trust:
+--
+--      checksum   -1461689551   (NOT -326884181 — your SQL ran, not the
+--                                empty file)
+--      constraints chk_transfers_status, chk_transfers_amount_positive
+--      indexes     idx_transfers_sender_wallet_id,
+--                  idx_transfers_receiver_wallet_id, transfers_pkey
+--
+--  ⚠️ THE QUIETEST RESULT IN THAT RUN IS THE MOST IMPORTANT ONE.
+--  `ddl-auto=validate` executed for the first time. Every earlier run died at
+--  Flyway, BEFORE Hibernate looked — so `Transfer` had never been checked
+--  against the real table. It passing means all seven @Column names, types
+--  and nullability match V8. I had said they looked right; that was a claim.
+--  Now it is a result, and the difference between those two is the whole
+--  reason this project keeps insisting on running things.
+--
+--
+--  ---------------------------------------------------------------------------
+--  ⚠️ 1(v) IS STILL OPEN — and the dev DB is not ready for it. Two blockers.
+--  ---------------------------------------------------------------------------
+--  I checked `paynest` (dev):
+--
+--      transfers table    DOES NOT EXIST
+--      flyway version     7          <- test DB is at 8, dev is a migration behind
+--      wallets            0 rows     <- 1(v) step 3 needs TWO
+--
+--  So running 1(v) right now gives you `relation "transfers" does not exist`,
+--  and after fixing that, every INSERT fails on the FK for the wrong reason —
+--  no wallets to point at. Order matters:
+--
+--    (a) Boot the app once to migrate dev to V8:
+--            ./mvnw spring-boot:run
+--        ⚠️ Port 8090 may already be busy with your running instance. If it
+--        is, either stop that one or use
+--            ./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8099
+--        (I hit exactly this earlier and misread "APPLICATION FAILED TO
+--        START" as a wiring failure when it was only a port clash.)
+--        Confirm:  SELECT max(version::int) FROM flyway_schema_history;  -> 8
+--
+--    (b) Create two wallets, because dev has none. Register two users through
+--        the API; `UserService.register` creates the wallet automatically
+--        (UserService:99). Then:
+--            SELECT id FROM wallets LIMIT 2;
+--        ⚠️ If this still returns fewer than 2 rows, STOP and fix that first.
+--        Every CHECK test below would report "0 rows" or an FK error, and
+--        both read like something other than what they are. This is the trap
+--        V7 hit twice.
+--
+--    (c) Then run 1(v) steps 2-5 as written below.
+--
+--  WHY BOTHER, GIVEN THE SUITE IS GREEN: the suite proved the SHAPE of the
+--  table (that is all `validate` does). It did not execute a single INSERT
+--  against `transfers`, so it says nothing about whether the CHECKs actually
+--  reject anything. `pg_constraint` shows they EXIST — I checked — but an
+--  existing constraint and a firing constraint are different claims, and only
+--  a rejected INSERT settles the second one.
+--  ---------------------------------------------------------------------------
+--  ===========================================================================
+--
+--
+--  ⚠️ READ THIS BEFORE DECIDING ANYTHING — DECISION #1 IS ALREADY MADE
+--  -------------------------------------------------------------------
+--  I had this file down as opening with an open question: does `Transfer` get
+--  its own row, or do the two `transactions` legs represent it alone?
+--
+--  Day-04 already answered it. Read V4, lines 99-120. It laid out exactly
+--  this choice as Option A vs Option B, took Option A, and said why:
+--
+--      "RECOMMENDATION: Option A today. ... Day-08 builds the transfer
+--       service and is the honest moment for a `transfers` table."
+--
+--  And then wrote the debt into the database itself, where you cannot miss
+--  it at 3am (V4, final COMMENT):
+--
+--      'Option A: transfer_id is stored as a plain UUID until a transfers
+--       table exists.'
+--
+--  So this file is not a fresh design decision. It is Day-04's deferred one
+--  being settled, and the words "until a transfers table exists" stop being
+--  true the moment V8 applies. That has a consequence you must handle in
+--  1(ii): THAT COMMENT IS NOW WRONG and has to be corrected, or the schema
+--  lies to the next reader. A written debt that is paid but not struck off is
+--  worse than an unwritten one — it sends someone looking for work already
+--  done.
+--
+--  The transferable point: this is the second time today a Day-04 comment has
+--  governed a Day-08 decision (step 0(xvi) was the first, via
+--  JdbcUserRepository's step-6a block). Reading your own old comments before
+--  designing is cheaper than re-deriving, and it is the only way the earlier
+--  reasoning gets to vote.
+--
+--
+--  WHY V8. V7 is the highest existing version, so this is V8. Same rule as
+--  always — the number is a position in YOUR history, not a label for the
+--  change. Do not reconcile it with persona or the microservice.
+--
+--  BLAST RADIUS: low, and in the easy direction again. Nothing reads
+--  `transfers` yet; 1(iv) writes the entity and steps 2-8 build on top. You
+--  are adding the table BEFORE the code that reads it, as V7 noted is the
+--  easier sequencing.
+-- ===========================================================================
+
+
+-- ---------------------------------------------------------------------------
+--  1(i). CREATE TABLE transfers
+--
+--  Syntax you already have in V2 and V4; the decisions are what matter.
+--
+--  COLUMN BY COLUMN, and every one of these is a decision with a reason:
+--
+--  id UUID PRIMARY KEY
+--      ⚠️ NOT `BIGINT GENERATED ALWAYS AS IDENTITY` — and this is the one
+--      place in the schema where you deliberately break from V1/V2/V4's
+--      pattern. Re-derive it rather than copying:
+--
+--      V2's comment already explains why the transfer's name is a UUID:
+--      "the application generates it BEFORE the insert: it needs a name for
+--      the transfer in order to write both legs under it. An identity column
+--      is assigned by the database, which is too late."
+--
+--      That argument applies with equal force here. If `transfers.id` were an
+--      identity column, you would have to INSERT the transfer, read back the
+--      generated id, and only then write the two legs — three round trips,
+--      and a window where a transfer row exists with no legs. With a
+--      client-generated UUID the application knows the id before anything is
+--      written, so all three inserts can go in one transaction with no
+--      read-back.
+--
+--      It also makes `transactions.transfer_id` and `transfer_categories
+--      .transfer_id` able to reference THIS column, which is the entire point
+--      of the table.
+--
+--      Type is UUID, not VARCHAR(36). Postgres stores UUID in 16 bytes and
+--      compares it as an integer; the text form is 36 bytes and compares
+--      character by character. V2 and V4 already use UUID — be consistent.
+--
+--  status VARCHAR(20) NOT NULL
+--      See DECISION #2 below before you write the DEFAULT. Constrain it with
+--      a CHECK, exactly as V7 did for wallets.status, and for the same reason
+--      V7 gives: a bad status value here FAILS OPEN. Code asking "is this
+--      COMPLETED?" gets false for 'completed' and may re-run a transfer that
+--      already moved money. Same class of typo as V7's, and this one can pay
+--      twice.
+--
+--      VARCHAR(20) not a Postgres ENUM — same trade V7 made, same reason:
+--      an ENUM value cannot be REMOVED, and transfer states are exactly what
+--      a product changes its mind about.
+--
+--  amount NUMERIC(19,4) NOT NULL
+--      Same type as wallets.balance and transactions.amount. Never float.
+--      4 decimals so intermediate results keep precision and rounding
+--      happens ONCE, at the end.
+--
+--      ⚠️ AND HERE, UNLIKE transactions.amount, ADD `CHECK (amount > 0)`.
+--      Think about why the two differ, because it looks inconsistent and is
+--      not: `transactions.amount` is SIGNED — the sign IS the direction, so
+--      half of all legitimate rows are negative and V2 explicitly declined
+--      that CHECK. But a *transfer* has a direction of its own (sender ->
+--      receiver named by the columns below), so its amount is a magnitude.
+--      A transfer of -50 from A to B is just a transfer of 50 from B to A
+--      written confusingly, and allowing both spellings means every query
+--      has to handle both. Topic 2 called `amount > 0` a security control,
+--      not a validation: without it, a negative transfer is a withdrawal
+--      from the recipient.
+--
+--  sender_wallet_id   BIGINT NOT NULL REFERENCES wallets(id)
+--  receiver_wallet_id BIGINT NOT NULL REFERENCES wallets(id)
+--      Two FKs to the same table. Normal, and note what is NOT here: no
+--      sender_email, no sender_name. V2's comment covers it — "wallet_id
+--      points at the fact, it does not copy it."
+--
+--      ⚠️ AND NOW THE QUESTION THIS TABLE RAISES THAT NOTHING ELSE HAS:
+--      is this a DUPLICATE of what `transactions` already records? The two
+--      legs already identify both wallets, by sign. So why store it again?
+--
+--      Answer, and it is worth being able to give: `transactions` records
+--      what HAPPENED to each wallet; `transfers` records what was ASKED FOR.
+--      They are the same only when the transfer succeeded. A FAILED transfer
+--      has a row here — sender, receiver, amount, status FAILED — and NO
+--      legs at all, because no money moved. You cannot represent "this
+--      transfer was attempted and refused" in a table whose rows are money
+--      movements. That asymmetry is the whole reason this table earns its
+--      place, and it is also the answer to "why not just query the legs?"
+--
+--      ⚠️ Do NOT add a CHECK (sender_wallet_id <> receiver_wallet_id) here
+--      without thinking: it is tempting and it is nearly right. Step 3's
+--      SelfTransferException is the gate for that, returning 400 so the
+--      caller learns what they did wrong. If you add the CHECK as well, a
+--      self-transfer that slips past the service becomes a 500. That is the
+--      V7 backstop-vs-gate distinction again, and the honest answer is the
+--      same as Wallet.debit's: a backstop is defensible if you LABEL it a
+--      backstop. Your call — decide and write the reason.
+--
+--  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--      Same as every other table. TIMESTAMPTZ, not TIMESTAMP.
+--
+--  completed_at TIMESTAMPTZ          -- NULLABLE, deliberately
+--      The one column here that is allowed to be null, and the null MEANS
+--      something: not finished. Compare `created_at`, where null would mean
+--      "we lost the record of when this happened".
+--      ⚠️ If you decide in DECISION #2 that there is no PENDING state today,
+--      think about whether this column still earns its place. A column that
+--      is always set at the same instant as created_at is noise.
+--
+--
+--  INDEXES — and apply V2's lesson rather than re-learning it:
+--  "PRIMARY KEY and UNIQUE create their B-tree indexes automatically. A
+--   FOREIGN KEY DOES NOT."
+--
+--  So neither sender_wallet_id nor receiver_wallet_id is indexed unless you
+--  write it. "Show me this wallet's transfers" is the query Day-09 builds
+--  (history/search), and it would be a sequential scan of every transfer
+--  ever made.
+--
+--  ⚠️ Two separate single-column indexes, NOT one composite on
+--  (sender_wallet_id, receiver_wallet_id). Re-derive from V2's phone-book
+--  line: a B-tree on (a, b) cannot answer a lookup by `b` alone. "Transfers
+--  I received" would not be served by a composite starting with sender.
+--
+--  Name them idx_transfers_sender_wallet_id and
+--  idx_transfers_receiver_wallet_id.
+--
+--  ⚠️ Decide whether to include created_at DESC, as V2 did for
+--  (wallet_id, created_at DESC). V2's reasoning — serves both "this wallet's
+--  rows" and "newest first" from one index, with no sort — applies here if
+--  Day-09 lists transfers newest-first, which it almost certainly will. Cost
+--  side, also from V2: "every INSERT must also update every index." Two
+--  indexes on a write-heavy ledger table is already a real cost; four would
+--  be worse. State your choice.
+--
+--  DO NOT add ON DELETE CASCADE to either FK. V2 declined it for exactly this
+--  reason and said why: destroying a financial record loses the audit trail.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE transfers (
+                           id UUID PRIMARY KEY,
+                           status VARCHAR(20) NOT NULL,
+                           amount NUMERIC(19, 4) NOT NULL,
+                           sender_wallet_id BIGINT NOT NULL REFERENCES wallets(id),
+                           receiver_wallet_id BIGINT NOT NULL REFERENCES wallets(id),
+                           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                           completed_at TIMESTAMPTZ,
+
+                           CONSTRAINT chk_transfers_status
+                               CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
+
+                           CONSTRAINT chk_transfers_amount_positive
+                               CHECK (amount > 0)
+);
+
+CREATE INDEX idx_transfers_sender_wallet_id
+    ON transfers (sender_wallet_id, created_at DESC);
+
+CREATE INDEX idx_transfers_receiver_wallet_id
+    ON transfers (receiver_wallet_id, created_at DESC);
+
+
+-- ---------------------------------------------------------------------------
+--  1(ii). Document it — and FIX V4's now-false comment.
+--
+--  (a) COMMENT ON TABLE transfers — say what it holds and, most importantly,
+--      HOW IT DIFFERS FROM `transactions`, since that is the question every
+--      future reader will have. One sentence on "transfers records what was
+--      asked for; transactions records what moved" is worth more than a list
+--      of columns they can already see.
+--
+--  (b) COMMENT ON COLUMN transfers.status — the three-or-four values, what
+--      each means, and the same EnumType.STRING / never-ORDINAL warning V7
+--      wrote for wallets.status. That warning is not boilerplate: JPA's
+--      default IS ordinal, and reordering the Java enum would silently
+--      reinterpret every historical row.
+--
+--  (c) ⚠️ THE ONE PEOPLE SKIP. Replace V4's comment on
+--      `transfer_categories.transfer_id`, which currently reads:
+--
+--          'Links transfer UUIDs to categories. Option A: transfer_id is
+--           stored as a plain UUID until a transfers table exists.'
+--
+--      A transfers table now exists. Re-run a COMMENT ON COLUMN statement
+--      for it saying so, and record whether you are now adding the FK that
+--      Option A declined.
+--
+--      AND THAT IS A REAL DECISION, not bookkeeping. You could now write
+--      `ALTER TABLE transfer_categories ADD CONSTRAINT ... FOREIGN KEY
+--      (transfer_id) REFERENCES transfers(id)` — Option B, finally
+--      available. Same for `transactions.transfer_id`.
+--
+--      ⚠️ BUT CHECK THE EXISTING DATA FIRST. Adding an FK to a populated
+--      column fails if any value has no matching parent row:
+--
+--          SELECT count(*) FROM transactions t
+--           WHERE NOT EXISTS (SELECT 1 FROM transfers f WHERE f.id = t.transfer_id);
+--
+--      Every existing `transactions` row was written before `transfers`
+--      existed, so every one of them is an orphan — if there are any rows at
+--      all, the ALTER will be rejected. Run the count before you decide.
+--      This is the standard shape of paying schema debt: the constraint you
+--      wanted is available, and the data you already have may not satisfy it.
+--
+--      MY READ: defer both FKs to a later migration and say so in the
+--      comment. Step 1's job is the transfers table; retrofitting integrity
+--      onto two older tables is a separate change with its own verification,
+--      and bundling it means a failure in either leaves you unsure which
+--      half broke. But do NOT leave V4's sentence standing — correct the
+--      comment even if you defer the constraint, because the sentence is
+--      what is false, not the absence of the FK.
+-- ---------------------------------------------------------------------------
+
+COMMENT ON TABLE transfers IS
+    'Records transfer requests: what was asked for. The transactions table records what actually moved.';
+
+COMMENT ON COLUMN transfers.status IS
+    'Transfer lifecycle status: PENDING, COMPLETED, or FAILED. The Java enum must use EnumType.STRING, never ordinal mapping.';
+
+COMMENT ON COLUMN transfer_categories.transfer_id IS
+    'Links transfer UUIDs to categories. The transfers table now exists; the foreign-key constraint is deferred to a later migration after existing orphan data is addressed.';
+
+
+-- ===========================================================================
+--  1(v). VERIFY — with psql, and verify more than "it ran".
+--
+--  NOTHING IN THE TEST SUITE WILL NOTICE ANY OF THIS, exactly as V7 warned.
+--  No test asserts on schema constraints. `ddl-auto=validate` will check the
+--  entity against the table once 1(iv) exists — which is a real check and the
+--  reason to run the suite after 1(iv) — but it says nothing about CHECKs,
+--  indexes or comments.
+--
+--  ⚠️ CORRECTIONS TO THIS BLOCK, 15 Oct 2026 — read before starting.
+--  I wrote steps 1-5 before V8 existed; three things need adjusting.
+--
+--    (1) The preamble above says `ddl-auto=validate` "WILL check the entity
+--        once 1(iv) exists". It HAS now — the 74/74 run did it, and it
+--        passed. Not pending any more.
+--
+--    (2) Step 1 says "You have 7 migrations today." You have EIGHT. The
+--        sentence was written before V8 applied. This is the exact thing
+--        that sentence warns against — counting instead of asserting on
+--        `success` — so do what it says, not what it counts.
+--
+--    (3) Step 3 has a GAP I only found by running it. See the box inside
+--        step 3 below. Short version: the FK fires FIRST, so an invalid
+--        wallet id masks every other constraint you are trying to test.
+--
+--
+--    1. Confirm V8 applied AND nothing failed:
+--         SELECT version, description, success FROM flyway_schema_history
+--         ORDER BY installed_rank DESC LIMIT 3;
+--       ⚠️ Assert on `success`, not on a row count — see correction (2).
+--
+--    2. Confirm the shape is what you meant:
+--         \d transfers
+--       Read it rather than glancing: is `id` uuid? is `completed_at`
+--       nullable while `created_at` is not? are BOTH FK indexes listed?
+--
+--    3. PROVE THE CHECKS FIRE. An untested constraint is indistinguishable
+--       from a comment. You need two real wallets first:
+--         SELECT id FROM wallets LIMIT 2;
+--       ⚠️ IF THAT RETURNS FEWER THAN 2 ROWS, STOP — every test below will
+--       report "0 rows" and 0 rows reads exactly like a pass. This is the
+--       trap V7 hit twice and the one the memory about empty-data assertions
+--       exists for. Create two wallets via the app first (register two
+--       users), then come back.
+--
+--       ⚠️⚠️ THE GAP I FOUND BY RUNNING THIS. I tried the first INSERT
+--       against the test DB using wallet id 1, and got:
+--
+--           ERROR: insert or update on table "transfers" violates foreign
+--                  key constraint "transfers_sender_wallet_id_fkey"
+--           DETAIL: Key (sender_wallet_id)=(1) is not present in wallets.
+--
+--       An ERROR, as step 3 told me to expect — and the WRONG ERROR. I was
+--       testing `amount > 0` and the FK rejected the row before the CHECK
+--       was ever evaluated. If I had only looked for "did it error?", I
+--       would have ticked off a constraint I never exercised.
+--
+--       ⚠️ SO: READ THE CONSTRAINT NAME IN EVERY ERROR, not just the word
+--       ERROR. Each test below names which constraint must appear:
+--
+--           amount test   -> chk_transfers_amount_positive
+--           status test   -> chk_transfers_status
+--           FK test       -> transfers_sender_wallet_id_fkey
+--
+--       If the name does not match the test, the test did not run. This is
+--       the same shape as the WalletServiceTest mutation: an assertion that
+--       passes for the wrong reason is worse than no assertion.
+--
+--       Then, with real ids substituted:
+--         -- amount must be positive
+--         INSERT INTO transfers (id, status, amount, sender_wallet_id, receiver_wallet_id)
+--         VALUES (gen_random_uuid(), 'COMPLETED', -5, <w1>, <w2>);
+--         → expect ERROR ... violates check constraint
+--                            "chk_transfers_amount_positive"
+--
+--         -- status must be a known value
+--         INSERT INTO transfers (id, status, amount, sender_wallet_id, receiver_wallet_id)
+--         VALUES (gen_random_uuid(), 'completed', 5, <w1>, <w2>);
+--         → expect ERROR ... "chk_transfers_status"
+--           (lowercase is the realistic typo, and V7 explains why this one
+--            matters most: a bad status FAILS OPEN — code asking "is this
+--            COMPLETED?" gets false for 'completed' and may pay twice.)
+--
+--         -- a wallet that does not exist
+--         INSERT INTO transfers (id, status, amount, sender_wallet_id, receiver_wallet_id)
+--         VALUES (gen_random_uuid(), 'COMPLETED', 5, 999999, <w2>);
+--         → expect ERROR ... "transfers_sender_wallet_id_fkey"
+--
+--         -- ⚠️ AND ONE MORE, WHICH IS A DECISION YOU MADE, NOT A MISTAKE:
+--         --    the self-transfer. 1(i) told you not to add
+--         --    CHECK (sender_wallet_id <> receiver_wallet_id) without
+--         --    thinking, and you did not add it.
+--         INSERT INTO transfers (id, status, amount, sender_wallet_id, receiver_wallet_id)
+--         VALUES (gen_random_uuid(), 'COMPLETED', 5, <w1>, <w1>);
+--         → expect INSERT 0 1 — IT SUCCEEDS, and that is correct today.
+--
+--           The database permits it; step 3's SelfTransferException is the
+--           gate, so the caller gets a 400 rather than a 500. Run it anyway:
+--           knowing the schema allows something your service forbids is
+--           worth more than assuming the two agree. Delete the row after.
+--
+--           ⚠️ It also means step 4's zero-sum invariant has NO backstop
+--           here. If a self-transfer ever reaches the repository, both legs
+--           hit one wallet and the ledger stays balanced while the money
+--           silently did nothing. Step 6 should have a test for that gate
+--           firing — note it now, act on it then.
+--
+--    4. AND PROVE A VALID ROW STILL WORKS — a CHECK that rejects everything
+--       passes test 3 perfectly:
+--         INSERT INTO transfers (id, status, amount, sender_wallet_id, receiver_wallet_id)
+--         VALUES (gen_random_uuid(), 'COMPLETED', 25.5000, <w1>, <w2>);
+--         → expect INSERT 0 1
+--       Then confirm the defaults landed:
+--         SELECT id, status, amount, created_at, completed_at FROM transfers;
+--       `created_at` set, `completed_at` null. If `completed_at` came back
+--       non-null you gave it a DEFAULT it should not have.
+--
+--       ⚠️ AND CHECK `amount` SPECIFICALLY. You inserted 25.5000 into a
+--       NUMERIC(19,4). It must read back as 25.5000 — four decimal places,
+--       not 25.5 and not 25.50. The scale is what makes Topic 2's "round
+--       once, at the end" possible; a column that silently truncated would
+--       look fine here and lose fractions of a cent per transfer later.
+--       Compare WalletRepositoryIT.defaultsComeFromTheDatabase, which
+--       asserts the same thing about wallets.balance via
+--       `compareTo(new BigDecimal("0.0000"))`.
+--
+--    5. Clean up the hand-made rows:  DELETE FROM transfers;
+--       ⚠️ Check the row count before and after. `DELETE FROM transfers`
+--       with a typo'd table name is a different statement entirely, and
+--       `DELETE 0` means you deleted nothing.
+--
+--  ⚠️ WHICH DATABASE. These are hand-written INSERTs that leave rows behind.
+--  Run them against the DEV database (`paynest`, port 5433), not
+--  `paynest_test` — and know which one your psql session is attached to
+--  before the first statement. Check the datasource URL, do not assume.
+-- ===========================================================================
