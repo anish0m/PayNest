@@ -25,7 +25,6 @@
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-    <!-- Placeholder shell: login/signup arrive in a later task. -->
     <nav class="navbar border-bottom">
         <div class="container">
             <span class="navbar-brand fw-semibold d-flex align-items-center gap-2">
@@ -38,9 +37,86 @@
             </button>
         </div>
     </nav>
+
     <main class="container py-5">
-        <h1 class="h3">PayNest</h1>
-        <p class="text-body-secondary">Front end coming soon.</p>
+        <div class="row justify-content-center">
+            <div class="col-12 col-sm-10 col-md-7 col-lg-5">
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <div id="auth-alert" class="alert d-none" role="alert"></div>
+
+                        <!-- Login panel -->
+                        <section id="login-panel">
+                            <h1 class="h4 mb-4">Log in</h1>
+                            <form id="login-form" novalidate>
+                                <div class="mb-3">
+                                    <label for="login-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="login-email" name="email"
+                                           autocomplete="email" required>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="login-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="login-password" name="password"
+                                           autocomplete="current-password" required>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Log in</button>
+                            </form>
+                            <p class="text-center mt-3 mb-0">
+                                Don't have an account? <a href="#signup" data-show="signup">Sign up!</a>
+                            </p>
+                        </section>
+
+                        <!-- Signup panel -->
+                        <section id="signup-panel" class="d-none">
+                            <h1 class="h4 mb-4">Sign up</h1>
+                            <form id="signup-form" novalidate>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-sm-6">
+                                        <label for="signup-firstName" class="form-label">First name</label>
+                                        <input type="text" class="form-control" id="signup-firstName" name="firstName"
+                                               autocomplete="given-name" maxlength="100" required>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label for="signup-lastName" class="form-label">Last name</label>
+                                        <input type="text" class="form-control" id="signup-lastName" name="lastName"
+                                               autocomplete="family-name" maxlength="100" required>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signup-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="signup-email" name="email"
+                                           autocomplete="email" required>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signup-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="signup-password" name="password"
+                                           autocomplete="new-password" minlength="8" maxlength="72" required
+                                           aria-describedby="signup-password-help">
+                                    <div id="signup-password-help" class="form-text">8 to 72 characters.</div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="signup-image" class="form-label">Profile picture (optional)</label>
+                                    <!-- Disabled: CreateUserRequest has no image field yet (plan §9 Q1). -->
+                                    <input type="file" class="form-control" id="signup-image" accept="image/*" disabled
+                                           aria-describedby="signup-image-help">
+                                    <div id="signup-image-help" class="form-text">Coming soon.</div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Create account</button>
+                            </form>
+                            <p class="text-center mt-3 mb-0">
+                                Already have an account? <a href="#login" data-show="login">Log in!</a>
+                            </p>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
@@ -48,5 +124,6 @@
             crossorigin="anonymous"></script>
     <script src="js/api.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/auth.js"></script>
 </body>
 </html>
