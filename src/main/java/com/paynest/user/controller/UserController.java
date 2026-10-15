@@ -82,6 +82,7 @@ public class UserController {
      * <p>{@code email} comes from the path, not the body — {@code UpdateProfileRequest}
      * cannot carry one anyway, so there is no value that could disagree with it.
      */
+    @PreAuthorize("#email == authentication.name or hasRole('ADMIN')")
     @PutMapping("/{email}")
     public UserResponse updateProfile(
             @PathVariable String email,
