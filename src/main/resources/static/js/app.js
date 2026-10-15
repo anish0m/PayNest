@@ -13,6 +13,7 @@
     }
 
     function renderUser(user) {
+        window.currentUser = user;
         avatar.textContent = '';
         if (user.image) {
             const img = document.createElement('img');
@@ -28,9 +29,11 @@
         document.getElementById('user-first').textContent = user.firstName;
     }
 
+    window.renderUser = renderUser; // profile.js re-renders after a save
+
     document.getElementById('logout-btn').addEventListener('click', auth.logout);
 
     api.get('/users/me')
-        .then(function (user) { window.currentUser = user; renderUser(user); })
+        .then(renderUser)
         .catch(function (err) { if (err.status !== 401) ui.error(err.message); });
 })();

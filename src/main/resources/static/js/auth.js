@@ -166,4 +166,7 @@
     if (new URLSearchParams(location.search).has('expired')) {
         showAlert('Your session has expired. Please log in again.', 'warning');
     }
+    if (new URLSearchParams(location.search).has('deleted')) {
+        showAlert('Your account has been deleted.', 'success');
+    }
 })();
