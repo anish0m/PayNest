@@ -81,4 +81,23 @@ public class Wallet {
 
         this.balance = this.balance.add(amount);
     }
+
+    public void debit(BigDecimal amount) {
+        if (amount == null) {
+            throw new IllegalArgumentException("Amount cannot be null");
+        }
+
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
+        }
+
+        BigDecimal newBalance = this.balance.subtract(amount);
+
+        // Backstop mirroring wallets_balance_non_negative; not the funds gate.
+        if (newBalance.signum() < 0) {
+            throw new IllegalStateException("Wallet balance cannot be negative");
+        }
+
+        this.balance = newBalance;
+    }
 }

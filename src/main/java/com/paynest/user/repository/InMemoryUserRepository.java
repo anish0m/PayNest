@@ -7,6 +7,9 @@ import com.paynest.user.model.User;
 import org.springframework.stereotype.Repository;
 import org.springframework.context.annotation.Profile;
 
+import java.lang.reflect.Field;
+
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -18,11 +21,27 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryUserRepository implements UserRepository {
 
     private final Map<String, User> usersByEmail = new ConcurrentHashMap<>();
+    private final AtomicLong nextId = new AtomicLong(1);
+
+    private void assignId(User user, Long id) {
+        try {
+            Field field = User.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(user, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Could not assign user id", e);
+        }
+    }
 
     public User save(User user) {
         if (usersByEmail.containsKey(user.getEmail())) {
             throw new DuplicateEmailException(user.getEmail());
         }
+
+        if (user.getId() == null) {
+            assignId(user, nextId.getAndIncrement());
+        }
+
         usersByEmail.put(user.getEmail(), user);
         return user;
     }

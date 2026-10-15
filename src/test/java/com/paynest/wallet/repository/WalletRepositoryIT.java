@@ -1,11 +1,11 @@
 package com.paynest.wallet.repository;
 
 import com.paynest.user.model.User;
+import com.paynest.wallet.repository.SpringDataWalletRepository;
 import com.paynest.user.repository.UserRepository;
 import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.model.WalletStatus;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -14,6 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WalletRepositoryIT {
 
     @Autowired
-    private WalletRepository wallets;
+    private SpringDataWalletRepository wallets;
 
     @Autowired
     private UserRepository users;
