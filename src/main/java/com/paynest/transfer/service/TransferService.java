@@ -12,11 +12,14 @@ import com.paynest.wallet.exception.WalletFrozenException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.Objects;
 
 import java.math.BigDecimal;
 
+// After debiting the sender, force an exception and assert in
+// PostgreSQL that the sender's balance remains unchanged.
 @Service
 public class TransferService {
 
@@ -29,7 +32,12 @@ public class TransferService {
         this.transfers = transfers;
     }
 
-    @Transactional
+
+    // The debit, credit, and transfer record are atomic:
+    // either all three are committed, or none are.
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            rollbackFor = Exception.class)
     public Transfer transfer(
             Long senderWalletId,
             Long receiverWalletId,
@@ -68,7 +76,13 @@ public class TransferService {
                     senderWalletId, amount, available);
         }
 
-        receiver.credit(amount);
+        // receiver is deliberately read a second time, because
+        // the receiver loaded is detached by the time the credit runs
+        Wallet managedReceiver = wallets.findById(receiverWalletId)
+                .orElseThrow(() ->
+                        new WalletNotFoundException(receiverWalletId));
+
+        managedReceiver.credit(amount);
 
         Transfer transfer = new Transfer(
                 amount, senderWalletId, receiverWalletId);

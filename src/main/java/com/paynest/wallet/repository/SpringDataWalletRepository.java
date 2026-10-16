@@ -15,7 +15,8 @@ public interface SpringDataWalletRepository extends JpaRepository<Wallet, Long> 
 
     boolean existsByUserId(Long userId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true,
+            flushAutomatically = true)
     @Query("""
            UPDATE Wallet w
               SET w.balance = w.balance - :amount
