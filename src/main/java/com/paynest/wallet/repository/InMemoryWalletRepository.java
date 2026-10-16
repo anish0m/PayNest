@@ -52,6 +52,11 @@ public class InMemoryWalletRepository implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findById(Long id) {
+        return Optional.ofNullable(walletsById.get(id));
+    }
+
+    @Override
     public boolean existsByUserId(Long userId) {
         return findByUserId(userId).isPresent();
     }

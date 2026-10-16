@@ -32,6 +32,12 @@ public class JpaWalletRepository implements WalletRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Wallet> findById(Long id) {
+        return wallets.findById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean existsByUserId(Long userId) {
         return wallets.existsByUserId(userId);
     }
