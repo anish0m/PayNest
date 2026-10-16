@@ -9,11 +9,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.paynest.category.exception.CategoryInUseException;
 import com.paynest.category.exception.CategoryNotFoundException;
 import com.paynest.category.exception.DuplicateCategoryException;
+
 import com.paynest.user.exception.DuplicateEmailException;
 import com.paynest.user.exception.UserNotFoundException;
 import com.paynest.user.exception.InvalidCredentialsException;
+
 import com.paynest.wallet.exception.WalletNotFoundException;
 import com.paynest.wallet.exception.WalletFrozenException;
+
+import com.paynest.transfer.exception.InsufficientFundsException;
+import com.paynest.transfer.exception.SelfTransferException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -107,4 +112,28 @@ public class GlobalExceptionHandler {
         problem.setProperty("errors", errors);
         return problem;
     }
+
+    @ExceptionHandler(InsufficientFundsException.class)
+    public ProblemDetail handleInsufficientFunds(
+            InsufficientFundsException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, e.getMessage());
+        problem.setTitle("Conflict");
+        problem.setProperty("walletId", e.getWalletId());
+        problem.setProperty("requested", e.getRequested());
+        problem.setProperty("available", e.getAvailable());
+        return problem;
+    }
+
+    @ExceptionHandler(SelfTransferException.class)
+    public ProblemDetail handleSelfTransfer(SelfTransferException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        problem.setTitle("Unprocessable Entity");
+        problem.setProperty("walletId", e.getWalletId());
+        return problem;
+    }
+
 }
