@@ -52,10 +52,17 @@ public class InMemoryWalletRepository implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findById(Long id) {
+        return Optional.ofNullable(walletsById.get(id));
+    }
+
+    @Override
     public boolean existsByUserId(Long userId) {
         return findByUserId(userId).isPresent();
     }
 
+    // This in-memory fake cannot model JPA detachment;
+    // the receiver re-read is verified against PostgreSQL.
     @Override
     public int debitIfSufficient(Long walletId, BigDecimal amount) {
         Wallet wallet = walletsById.get(walletId);
