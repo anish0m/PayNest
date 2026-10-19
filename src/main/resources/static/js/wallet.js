@@ -9,6 +9,8 @@
     const lockedEl = document.getElementById('wallet-locked');
     const errorEl = document.getElementById('wallet-error');
     const openBtn = document.getElementById('deposit-open');
+    const sendBtn = document.getElementById('send-open');
+    const idEl = document.getElementById('wallet-id');
 
     const STATUS = {
         ACTIVE: { label: 'Active', cls: 'text-bg-success' },
@@ -32,6 +34,9 @@
 
         const active = w.status === 'ACTIVE';
         openBtn.disabled = !active;
+        sendBtn.disabled = !active;
+        idEl.textContent = 'Wallet ID #' + w.id;
+        idEl.classList.remove('d-none');
         lockedEl.textContent = active ? '' : (LOCKED_MSG[w.status] || 'Money movement is disabled for this wallet.');
         lockedEl.classList.toggle('d-none', active);
     }
@@ -47,12 +52,13 @@
                 balanceEl.textContent = '—';
                 statusEl.classList.add('d-none');
                 openBtn.disabled = true;
+                sendBtn.disabled = true;
                 errorEl.classList.remove('d-none');
             });
     }
 
     document.getElementById('wallet-retry').addEventListener('click', loadWallet);
-    window.loadWallet = loadWallet; // send money (task 11) refreshes after a transfer
+    window.loadWallet = loadWallet; // transfer.js refreshes after a send
 
     // ---- Add money ---------------------------------------------------
     const modal = document.getElementById('deposit-modal');
