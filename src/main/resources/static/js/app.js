@@ -27,6 +27,7 @@
         document.getElementById('user-handle').textContent = user.username.startsWith('@') ? user.username : '@' + user.username;
         document.getElementById('user-name').textContent = user.firstName + ' ' + user.lastName;
         document.getElementById('user-first').textContent = user.firstName;
+        document.getElementById('admin-link').classList.toggle('d-none', user.role !== 'ADMIN');
     }
 
     window.renderUser = renderUser; // profile.js re-renders after a save
