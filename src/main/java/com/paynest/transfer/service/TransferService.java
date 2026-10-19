@@ -18,8 +18,6 @@ import java.util.Objects;
 
 import java.math.BigDecimal;
 
-// After debiting the sender, force an exception and assert in
-// PostgreSQL that the sender's balance remains unchanged.
 @Service
 public class TransferService {
 
@@ -66,6 +64,12 @@ public class TransferService {
         }
 
         int rows = wallets.debitIfSufficient(senderWalletId, amount);
+
+        // step-8: THIS is the line to break. Throw a RuntimeException on the
+        // next line, then assert in psql that the sender's balance is
+        // unchanged — the debit above has already run, so a committed
+        // balance here would prove the rollback does not work.
+        // Delete this comment when step 8 closes.
 
         if (rows == 0) {
             BigDecimal available = wallets.findById(senderWalletId)
