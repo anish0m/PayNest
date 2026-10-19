@@ -18,8 +18,6 @@ import java.util.Objects;
 
 import java.math.BigDecimal;
 
-// After debiting the sender, force an exception and assert in
-// PostgreSQL that the sender's balance remains unchanged.
 @Service
 public class TransferService {
 
