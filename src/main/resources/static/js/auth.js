@@ -50,6 +50,14 @@
         });
     });
 
+    // Placeholders for features the backend doesn't support yet.
+    document.querySelectorAll('[data-soon]').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            showAlert(a.getAttribute('data-soon') + ' is coming soon.', 'info');
+        });
+    });
+
     function clearErrors(form) {
         form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
     }

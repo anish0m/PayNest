@@ -24,30 +24,25 @@
           crossorigin="anonymous">
     <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
-    <nav class="navbar border-bottom">
-        <div class="container">
-            <span class="navbar-brand fw-semibold d-flex align-items-center gap-2">
-                <img src="img/logo.png" alt="" width="32" height="32">PayNest
-            </span>
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-theme-toggle
-                    aria-label="Toggle light/dark theme">
-                <span class="theme-icon-light">☀️ Light</span>
-                <span class="theme-icon-dark">🌙 Dark</span>
-            </button>
-        </div>
-    </nav>
+<body class="auth-body">
+    <button type="button" class="btn btn-outline-secondary btn-sm auth-theme" data-theme-toggle
+            aria-label="Toggle light/dark theme">
+        <span class="theme-icon-light">☀️ Light</span>
+        <span class="theme-icon-dark">🌙 Dark</span>
+    </button>
 
-    <main class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-sm-10 col-md-7 col-lg-5">
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
+    <main class="auth-page">
+        <div class="auth-bubbles" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div class="auth-left">
+            <div class="auth-form-wrap">
+                <div class="auth-logo"><img src="img/logo.png" alt="PayNest logo" width="64" height="64"></div>
+                <div>
+                    <div>
                         <div id="auth-alert" class="alert d-none" role="alert"></div>
 
                         <!-- Login panel -->
                         <section id="login-panel">
-                            <h1 class="h4 mb-4">Log in</h1>
+                            <h1 class="auth-title">Log in to PayNest</h1>
                             <form id="login-form" novalidate>
                                 <div class="mb-3">
                                     <label for="login-email" class="form-label">Email</label>
@@ -55,22 +50,30 @@
                                            autocomplete="email" required>
                                     <div class="invalid-feedback"></div>
                                 </div>
-                                <div class="mb-4">
+                                <div class="mb-3">
                                     <label for="login-password" class="form-label">Password</label>
                                     <input type="password" class="form-control" id="login-password" name="password"
                                            autocomplete="current-password" required>
                                     <div class="invalid-feedback"></div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Log in</button>
+                                <!-- Remember me / Forgot password: UI only until the backend supports them. -->
+                                <div class="d-flex justify-content-between align-items-center mb-4 small">
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" id="login-remember" name="remember">
+                                        <label class="form-check-label" for="login-remember">Remember me</label>
+                                    </div>
+                                    <a href="#" data-soon="Password reset">Forgot password?</a>
+                                </div>
+                                <button type="submit" class="btn btn-auth w-100">Log in</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
-                                Don't have an account? <a href="#signup" data-show="signup">Sign up!</a>
+                                Don't have an account? <a href="#signup" data-show="signup"><strong>Sign up</strong></a>
                             </p>
                         </section>
 
                         <!-- Signup panel -->
                         <section id="signup-panel" class="d-none">
-                            <h1 class="h4 mb-4">Sign up</h1>
+                            <h1 class="auth-title">Sign up for PayNest</h1>
                             <form id="signup-form" novalidate>
                                 <div class="row g-3 mb-3">
                                     <div class="col-sm-6">
@@ -107,14 +110,23 @@
                                            aria-describedby="signup-image-help">
                                     <div id="signup-image-help" class="form-text">Coming soon.</div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Create account</button>
+                                <button type="submit" class="btn btn-auth w-100">Create account</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
-                                Already have an account? <a href="#login" data-show="login">Log in!</a>
+                                Already have an account? <a href="#login" data-show="login"><strong>Log in</strong></a>
                             </p>
                         </section>
                     </div>
                 </div>
+            </div>
+        </div>
+        <div class="auth-right" aria-hidden="true">
+            <div class="auth-hero">
+                <div>
+                    <div class="auth-hero-title">PayNest</div>
+                    <div class="auth-hero-tag">Where Your Money Feels At Home</div>
+                </div>
+                <div class="auth-hero-logo"><img src="img/logo.png" alt="" width="96" height="96"></div>
             </div>
         </div>
     </main>
