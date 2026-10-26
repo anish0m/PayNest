@@ -135,3 +135,13 @@
     .auth-hero { padding: 2rem 1rem; }
     .auth-hero-logo img { width: 104px; height: 104px; }
 }
+.pw-toggle {
+    border: var(--bs-border-width) solid var(--bs-border-color); border-left: 0;
+    background: var(--bs-body-bg); color: var(--bs-secondary-color); display: flex; align-items: center;
+}
+.pw-toggle:hover, .pw-toggle:focus-visible { color: var(--auth-accent); background: var(--bs-body-bg); }
+.pw-toggle svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pw-toggle .pw-eye-off, .pw-toggle[aria-pressed="true"] .pw-eye { display: none; }
+.pw-toggle[aria-pressed="true"] .pw-eye-off { display: inline; }
+.auth-body .input-group > .form-control:focus { border-right: 0; }
+.auth-body .input-group > .form-control.is-invalid ~ .pw-toggle { border-color: var(--bs-form-invalid-border-color); }
