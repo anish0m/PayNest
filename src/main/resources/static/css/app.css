@@ -99,7 +99,11 @@
 .auth-body a { color: var(--auth-accent); text-decoration: none; }
 .auth-body a:hover { text-decoration: underline; }
 .btn-auth {
-    background: var(--auth-accent); color: #fff; border: 0;
+    --bs-btn-bg: var(--auth-accent); --bs-btn-color: #fff;
+    --bs-btn-hover-bg: var(--auth-accent); --bs-btn-hover-color: #fff;
+    --bs-btn-active-bg: var(--auth-accent); --bs-btn-active-color: #fff;
+    --bs-btn-disabled-bg: var(--auth-accent); --bs-btn-disabled-color: #fff;
+    border: 0;
     border-radius: 999px; padding: .55rem 1rem;
     box-shadow: 0 6px 16px rgba(111, 127, 224, .35);
 }
