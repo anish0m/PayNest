@@ -25,11 +25,16 @@
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body class="auth-body">
-    <button type="button" class="btn btn-outline-secondary btn-sm auth-theme" data-theme-toggle
-            aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
-        <span class="theme-icon-light">☀️</span>
-        <span class="theme-icon-dark">🌙</span>
-    </button>
+    <!-- mirrors the app navbar container so the toggle lands where it sits beside the account menu -->
+    <div class="auth-theme-bar">
+        <div class="container d-flex justify-content-end">
+            <button type="button" class="btn btn-outline-secondary btn-sm auth-theme" data-theme-toggle
+                    aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
+                <span class="theme-icon-light">☀️</span>
+                <span class="theme-icon-dark">🌙</span>
+            </button>
+        </div>
+    </div>
 
     <main class="auth-page">
         <svg class="auth-waves" aria-hidden="true" viewBox="0 0 1440 900" preserveAspectRatio="none">

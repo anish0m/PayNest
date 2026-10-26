@@ -68,7 +68,9 @@
     --auth-card: #1b1e33;
     --auth-panel: linear-gradient(150deg, #5d68b8 0%, #4a549e 55%, #6a75c4 100%);
 }
-.auth-theme { position: fixed; top: 1rem; right: max(1rem, calc((100vw - 1200px) / 2)); z-index: 10; }
+.auth-theme-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding-top: 15.5px; pointer-events: none; }
+.auth-theme { pointer-events: auto; margin-right: 188px; }
+@media (max-width: 575.98px) { .auth-theme { margin-right: 44px; } }
 .auth-page {
     position: relative; min-height: 100vh; overflow: hidden;
     display: flex; align-items: center; justify-content: center; padding: 3rem 1rem;
