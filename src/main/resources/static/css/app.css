@@ -49,9 +49,9 @@
 /* ---------- Auth (login / signup) page ---------- */
 .auth-body {
     --auth-accent: #6f7fe0;
-    --auth-bg: #eef0fd;
-    --auth-blob: #d6dbfb;
-    --auth-blob2: #c5ccf8;
+    --auth-bg: #f7f8fe;
+    --auth-blob: #e7eafd;
+    --auth-blob2: #dce0fc;
     --auth-card: #ffffff;
     --auth-panel: linear-gradient(150deg, #a9b4f5 0%, #8f9cf0 55%, #b7c0f7 100%);
     background: var(--auth-bg);
