@@ -24,30 +24,40 @@
           crossorigin="anonymous">
     <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
-    <nav class="navbar border-bottom">
-        <div class="container">
-            <span class="navbar-brand fw-semibold d-flex align-items-center gap-2">
-                <img src="img/logo.png" alt="" width="32" height="32">PayNest
-            </span>
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-theme-toggle
-                    aria-label="Toggle light/dark theme">
-                <span class="theme-icon-light">☀️ Light</span>
-                <span class="theme-icon-dark">🌙 Dark</span>
+<body class="auth-body">
+    <!-- mirrors the app navbar container so the toggle lands where it sits beside the account menu -->
+    <div class="auth-theme-bar">
+        <div class="container d-flex justify-content-end">
+            <button type="button" class="btn btn-outline-secondary btn-sm auth-theme" data-theme-toggle
+                    aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
+                <span class="theme-icon-light">☀️</span>
+                <span class="theme-icon-dark">🌙</span>
             </button>
         </div>
-    </nav>
+    </div>
 
-    <main class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-sm-10 col-md-7 col-lg-5">
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
+    <main class="auth-page">
+        <svg class="auth-waves" aria-hidden="true" viewBox="0 0 1440 900" preserveAspectRatio="none">
+            <path d="M0 120 C240 40 420 220 720 140 S1200 20 1440 110 V0 H0Z"/>
+            <path d="M0 220 C300 120 520 320 820 220 S1260 120 1440 200 V0 H0Z"/>
+            <path d="M0 300 C180 380 260 520 140 640 S60 820 0 900Z"/>
+            <path d="M0 180 C260 300 380 480 240 620 S120 820 180 900 H0Z"/>
+            <path d="M1440 260 C1240 360 1180 520 1300 640 S1400 820 1360 900 H1440Z"/>
+            <path d="M1440 160 C1180 300 1100 500 1220 660 S1320 840 1250 900 H1440Z"/>
+            <path d="M0 780 C260 700 520 860 800 780 S1240 680 1440 760 V900 H0Z"/>
+            <path d="M0 700 C320 620 560 820 860 720 S1280 600 1440 690 V900 H0Z"/>
+        </svg>
+        <div class="auth-card">
+        <div class="auth-left">
+            <div class="auth-form-wrap">
+                <div class="auth-logo"><img src="img/logo.png" alt="PayNest logo" width="64" height="64"></div>
+                <div>
+                    <div>
                         <div id="auth-alert" class="alert d-none" role="alert"></div>
 
                         <!-- Login panel -->
                         <section id="login-panel">
-                            <h1 class="h4 mb-4">Log in</h1>
+                            <h1 class="auth-title">Log in to PayNest</h1>
                             <form id="login-form" novalidate>
                                 <div class="mb-3">
                                     <label for="login-email" class="form-label">Email</label>
@@ -55,22 +65,36 @@
                                            autocomplete="email" required>
                                     <div class="invalid-feedback"></div>
                                 </div>
-                                <div class="mb-4">
+                                <div class="mb-3">
                                     <label for="login-password" class="form-label">Password</label>
-                                    <input type="password" class="form-control" id="login-password" name="password"
-                                           autocomplete="current-password" required>
-                                    <div class="invalid-feedback"></div>
+                                    <div class="input-group has-validation">
+                                        <input type="password" class="form-control" id="login-password" name="password"
+                                               autocomplete="current-password" required>
+                                        <button type="button" class="btn pw-toggle" data-pw-toggle aria-label="Show password" aria-pressed="false">
+                                            <svg class="pw-eye" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg class="pw-eye-off" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>
+                                        </button>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Log in</button>
+                                <!-- Remember me / Forgot password: UI only until the backend supports them. -->
+                                <div class="d-flex justify-content-between align-items-center mb-4 small">
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" id="login-remember" name="remember">
+                                        <label class="form-check-label" for="login-remember">Remember me</label>
+                                    </div>
+                                    <a href="#" data-soon="Password reset">Forgot password?</a>
+                                </div>
+                                <button type="submit" class="btn btn-auth w-100">Log in</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
-                                Don't have an account? <a href="#signup" data-show="signup">Sign up!</a>
+                                Don't have an account? <a href="#signup" data-show="signup"><strong>Sign up</strong></a>
                             </p>
                         </section>
 
                         <!-- Signup panel -->
                         <section id="signup-panel" class="d-none">
-                            <h1 class="h4 mb-4">Sign up</h1>
+                            <h1 class="auth-title">Sign up for PayNest</h1>
                             <form id="signup-form" novalidate>
                                 <div class="row g-3 mb-3">
                                     <div class="col-sm-6">
@@ -94,11 +118,17 @@
                                 </div>
                                 <div class="mb-3">
                                     <label for="signup-password" class="form-label">Password</label>
-                                    <input type="password" class="form-control" id="signup-password" name="password"
-                                           autocomplete="new-password" minlength="8" maxlength="72" required
-                                           aria-describedby="signup-password-help">
+                                    <div class="input-group has-validation">
+                                        <input type="password" class="form-control" id="signup-password" name="password"
+                                               autocomplete="new-password" minlength="8" maxlength="72" required
+                                               aria-describedby="signup-password-help">
+                                        <button type="button" class="btn pw-toggle" data-pw-toggle aria-label="Show password" aria-pressed="false">
+                                            <svg class="pw-eye" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg class="pw-eye-off" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>
+                                        </button>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
                                     <div id="signup-password-help" class="form-text">8 to 72 characters.</div>
-                                    <div class="invalid-feedback"></div>
                                 </div>
                                 <div class="mb-4">
                                     <label for="signup-image" class="form-label">Profile picture (optional)</label>
@@ -107,15 +137,23 @@
                                            aria-describedby="signup-image-help">
                                     <div id="signup-image-help" class="form-text">Coming soon.</div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Create account</button>
+                                <button type="submit" class="btn btn-auth w-100">Create account</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
-                                Already have an account? <a href="#login" data-show="login">Log in!</a>
+                                Already have an account? <a href="#login" data-show="login"><strong>Log in</strong></a>
                             </p>
                         </section>
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="auth-right" aria-hidden="true">
+            <div class="auth-hero">
+                <div class="auth-hero-logo"><img src="img/logo.png" alt="" width="200" height="200"></div>
+                <div class="auth-hero-title">PayNest</div>
+                <div class="auth-hero-tag">Where Your Money Feels At Home</div>
+            </div>
+        </div>
         </div>
     </main>
 

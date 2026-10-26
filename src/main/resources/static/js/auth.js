@@ -50,6 +50,24 @@
         });
     });
 
+    // Placeholders for features the backend doesn't support yet.
+    document.querySelectorAll('[data-pw-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const input = btn.parentElement.querySelector('input');
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.setAttribute('aria-pressed', String(show));
+            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        });
+    });
+
+    document.querySelectorAll('[data-soon]').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            showAlert(a.getAttribute('data-soon') + ' is coming soon.', 'info');
+        });
+    });
+
     function clearErrors(form) {
         form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
     }
