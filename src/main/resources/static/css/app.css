@@ -133,5 +133,5 @@
     .auth-left, .auth-right { flex-basis: auto; }
     .auth-left { padding: 2rem 1.25rem; }
     .auth-hero { padding: 2rem 1rem; }
-    .auth-hero-logo img { width: 64px; height: 64px; }
+    .auth-hero-logo img { width: 104px; height: 104px; }
 }
