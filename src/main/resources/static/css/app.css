@@ -151,3 +151,9 @@
 .pw-toggle[aria-pressed="true"] .pw-eye-off { display: inline; }
 .auth-body .input-group > .form-control:focus { border-right: 0; }
 .auth-body .input-group > .form-control.is-invalid ~ .pw-toggle { border-color: var(--bs-form-invalid-border-color); }
+/* icon-only theme toggle: no border, no hover colour, grows slightly on hover */
+[data-theme-toggle], [data-theme-toggle]:hover, [data-theme-toggle]:focus, [data-theme-toggle]:active {
+    border-color: transparent !important; background: transparent !important; box-shadow: none !important;
+}
+[data-theme-toggle] { transition: transform .15s ease; }
+[data-theme-toggle]:hover, [data-theme-toggle]:focus-visible { transform: scale(1.15); }
