@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 import java.security.Principal;
 
@@ -40,6 +45,18 @@ public class TransferController {
                 request.amount());
 
         return TransferResponse.from(transfer);
+    }
+
+    @GetMapping("/wallets/{walletId}")
+    public Page<TransferResponse> history(
+            Principal principal,
+            @PathVariable Long walletId,
+            @PageableDefault(size = 20) Pageable pageable) {
+
+        // History is always newest-first; caller-provided sort is ignored.
+        return transfers
+                .history(walletId, principal.getName(), pageable)
+                .map(TransferResponse::from);
     }
 
     // Errors are mapped by GlobalExceptionHandler; no try/catch belongs here.

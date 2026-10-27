@@ -4,7 +4,9 @@ import com.paynest.transfer.model.Transfer;
 import com.paynest.transfer.repository.TransferRepository;
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
+import com.paynest.transfer.exception.WalletAccessDeniedException;
 
+import com.paynest.wallet.service.WalletService;
 import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.repository.WalletRepository;
 import com.paynest.wallet.exception.WalletNotFoundException;
@@ -13,6 +15,8 @@ import com.paynest.wallet.exception.WalletFrozenException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Objects;
 
@@ -23,11 +27,15 @@ public class TransferService {
 
     private final WalletRepository wallets;
     private final TransferRepository transfers;
+    private final WalletService walletService;
 
-    public TransferService(WalletRepository wallets,
-                           TransferRepository transfers) {
+    public TransferService(
+            WalletRepository wallets,
+            TransferRepository transfers,
+            WalletService walletService) {
         this.wallets = wallets;
         this.transfers = transfers;
+        this.walletService = walletService;
     }
 
 
@@ -87,5 +95,28 @@ public class TransferService {
         transfer.markCompleted();
 
         return transfers.save(transfer);
+    }
+    
+    @Transactional(readOnly = true)
+    public Page<Transfer> history(
+            Long walletId,
+            String callerEmail,
+            Pageable pageable) {
+
+        Wallet requestedWallet = wallets.findById(walletId)
+                .orElseThrow(() ->
+                        new WalletNotFoundException(walletId));
+
+        Wallet callerWallet = walletService.getByEmail(callerEmail);
+
+        // Existence is checked first deliberately: this API chooses 404 for an
+        // unknown wallet and 403 only when the wallet exists but is not yours.
+        if (!Objects.equals(
+                requestedWallet.getId(),
+                callerWallet.getId())) {
+            throw new WalletAccessDeniedException(walletId);
+        }
+
+        return transfers.findByWalletId(walletId, pageable);
     }
 }

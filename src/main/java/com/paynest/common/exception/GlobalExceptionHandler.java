@@ -19,6 +19,7 @@ import com.paynest.wallet.exception.WalletFrozenException;
 
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
+import com.paynest.transfer.exception.WalletAccessDeniedException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -123,6 +124,17 @@ public class GlobalExceptionHandler {
         problem.setProperty("walletId", e.getWalletId());
         problem.setProperty("requested", e.getRequested());
         problem.setProperty("available", e.getAvailable());
+        return problem;
+    }
+
+    @ExceptionHandler(WalletAccessDeniedException.class)
+    public ProblemDetail handleWalletAccessDenied(
+            WalletAccessDeniedException e) {
+
+        // Do not expose wallet properties; this avoids confirming resource details.
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, e.getMessage());
+        problem.setTitle("Forbidden");
         return problem;
     }
 
