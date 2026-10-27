@@ -45,31 +45,57 @@
 
     <main class="container py-4">
         <div class="row g-4">
-            <!-- 2/3: profile -->
+            <!-- 2/3: profile + linked card -->
             <div class="col-lg-8">
                 <section class="card dash-card h-100" id="profile-card" aria-labelledby="profile-card-title">
                     <div class="card-body p-4">
                         <h2 class="h6 text-body-secondary mb-4" id="profile-card-title">Profile</h2>
-                        <div class="d-flex flex-column flex-sm-row align-items-center align-items-sm-start gap-4">
-                            <span id="user-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
-                            <div class="flex-grow-1 w-100">
-                                <p class="h3 mb-1 text-center text-sm-start" id="user-name">
-                                    <span class="placeholder col-6" aria-hidden="true"></span>
-                                </p>
-                                <p class="text-body-secondary mb-4 text-center text-sm-start" id="user-handle"></p>
-                                <dl class="row dash-info mb-0">
-                                    <dt class="col-sm-4">First name</dt><dd class="col-sm-8" id="user-first"></dd>
-                                    <dt class="col-sm-4">Last name</dt><dd class="col-sm-8" id="user-last"></dd>
-                                    <dt class="col-sm-4">Email</dt><dd class="col-sm-8 text-break" id="user-email"></dd>
-                                    <dt class="col-sm-4">Role</dt><dd class="col-sm-8" id="user-role"></dd>
-                                </dl>
+                        <div class="row g-4 align-items-center">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-3 mb-4">
+                                    <span id="user-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
+                                    <div class="min-w-0">
+                                        <p class="h5 mb-1 text-break" id="user-handle">
+                                            <span class="placeholder col-8" aria-hidden="true"></span>
+                                        </p>
+                                        <p class="small text-body-secondary mb-0" id="user-date"></p>
+                                    </div>
+                                </div>
+                                <p class="h3 mb-1" id="user-name"></p>
+                                <p class="text-body-secondary mb-0 text-break" id="user-email"></p>
+                            </div>
+                            <div class="col-md-6">
+                            <h3 class="h6 text-body-secondary mb-2">Linked card</h3>
+                            <div class="pay-card" aria-label="Linked USD card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span class="fw-semibold d-flex align-items-center gap-2">
+                                        <img src="img/logo.png" alt="" width="24" height="24">PayNest
+                                    </span>
+                                    <span class="pay-card-cur">USD</span>
+                                </div>
+                                <div class="pay-card-num money" id="card-number">•••• •••• •••• ••••</div>
+                                <div class="d-flex justify-content-between align-items-end">
+                                    <div>
+                                        <div class="pay-card-label">Card holder</div>
+                                        <div class="fw-semibold text-uppercase" id="card-holder">&nbsp;</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="pay-card-label">Wallet ID</div>
+                                        <div class="fw-semibold" id="wallet-id" title="Share this so others can send you money">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                                <div class="d-flex gap-2 mt-3">
+                                    <button type="button" class="btn btn-sm btn-dash-outline flex-fill" data-soon disabled title="Coming soon">Edit</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger flex-fill" data-soon disabled title="Coming soon">Delete</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </section>
             </div>
 
-            <!-- 1/3: balance + linked card -->
+            <!-- 1/3: balance -->
             <div class="col-lg-4">
                 <section class="card dash-card h-100" id="wallet-card" aria-labelledby="wallet-title" aria-busy="true">
                     <div class="card-body p-4 d-flex flex-column">
@@ -86,31 +112,11 @@
                             <span>Could not load your wallet.</span>
                             <button type="button" class="btn btn-sm btn-outline-danger" id="wallet-retry">Retry</button>
                         </div>
-                        <div class="d-flex gap-2 mb-4">
+                        <div class="d-flex gap-2 mt-auto">
                             <button type="button" class="btn btn-dash flex-fill" id="deposit-open" disabled
                                     data-bs-toggle="modal" data-bs-target="#deposit-modal">+ Add money</button>
                             <button type="button" class="btn btn-dash-outline flex-fill" id="send-open" disabled
                                     data-bs-toggle="modal" data-bs-target="#send-modal">Send money</button>
-                        </div>
-                        <h3 class="h6 text-body-secondary mb-2">Linked card</h3>
-                        <div class="pay-card mt-auto" aria-label="Linked USD card">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <span class="fw-semibold d-flex align-items-center gap-2">
-                                    <img src="img/logo.png" alt="" width="24" height="24">PayNest
-                                </span>
-                                <span class="pay-card-cur">USD</span>
-                            </div>
-                            <div class="pay-card-num money" id="card-number">•••• •••• •••• ••••</div>
-                            <div class="d-flex justify-content-between align-items-end">
-                                <div>
-                                    <div class="pay-card-label">Card holder</div>
-                                    <div class="fw-semibold text-uppercase" id="card-holder">&nbsp;</div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="pay-card-label">Wallet ID</div>
-                                    <div class="fw-semibold" id="wallet-id" title="Share this so others can send you money">—</div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </section>

@@ -27,10 +27,9 @@
         const full = user.firstName + ' ' + user.lastName;
         document.getElementById('user-name').textContent = full;
         document.getElementById('user-handle').textContent = user.username.startsWith('@') ? user.username : '@' + user.username;
-        document.getElementById('user-first').textContent = user.firstName;
-        document.getElementById('user-last').textContent = user.lastName;
         document.getElementById('user-email').textContent = user.email;
-        document.getElementById('user-role').textContent = user.role === 'ADMIN' ? 'Admin' : 'User';
+        // No join date from the API yet, so show today's date.
+        document.getElementById('user-date').textContent = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
         document.getElementById('card-holder').textContent = full;
         document.getElementById('admin-link').classList.toggle('d-none', user.role !== 'ADMIN');
     }

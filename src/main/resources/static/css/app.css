@@ -80,6 +80,8 @@
     --bs-btn-active-bg: var(--dash-accent); --bs-btn-active-color: var(--dash-on-accent); --bs-btn-active-border-color: var(--dash-accent);
     --bs-btn-disabled-color: var(--dash-accent); --bs-btn-disabled-border-color: var(--dash-accent);
 }
+.min-w-0 { min-width: 0; }
+.pay-card .pay-card-num { margin: .5rem 0; }
 .avatar-lg { width: 6rem; height: 6rem; font-size: 2rem; flex-shrink: 0; }
 .pay-card {
     background: var(--dash-panel); color: #fff; border-radius: .9rem;
