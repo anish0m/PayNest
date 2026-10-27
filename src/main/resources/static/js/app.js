@@ -1,5 +1,5 @@
 // PayNest home page shell: guards the page, loads the current user into
-// the navbar (@username + initials avatar) and wires up logout.
+// the profile card and linked card, and wires up logout.
 (function () {
     const avatar = document.getElementById('user-avatar');
     if (!avatar) return; // not the app page
@@ -24,9 +24,14 @@
         } else {
             avatar.textContent = initials(user);
         }
+        const full = user.firstName + ' ' + user.lastName;
+        document.getElementById('user-name').textContent = full;
         document.getElementById('user-handle').textContent = user.username.startsWith('@') ? user.username : '@' + user.username;
-        document.getElementById('user-name').textContent = user.firstName + ' ' + user.lastName;
         document.getElementById('user-first').textContent = user.firstName;
+        document.getElementById('user-last').textContent = user.lastName;
+        document.getElementById('user-email').textContent = user.email;
+        document.getElementById('user-role').textContent = user.role === 'ADMIN' ? 'Admin' : 'User';
+        document.getElementById('card-holder').textContent = full;
         document.getElementById('admin-link').classList.toggle('d-none', user.role !== 'ADMIN');
     }
 

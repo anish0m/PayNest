@@ -46,6 +46,51 @@
 /* Manage categories: a name keeps a readable width before the buttons wrap. */
 .cat-name { min-width: 9rem; flex-basis: 9rem; }
 
+/* ---------- Dashboard (app.html): same periwinkle palette as auth ---------- */
+.dash-body {
+    --dash-accent: #6f7fe0;
+    --dash-on-accent: #fff;
+    --dash-bg: #f7f8fe;
+    --dash-card: #ffffff;
+    --dash-panel: linear-gradient(150deg, #a9b4f5 0%, #8f9cf0 55%, #b7c0f7 100%);
+    background: var(--dash-bg);
+    min-height: 100vh;
+}
+[data-bs-theme="dark"] .dash-body {
+    --dash-accent: #aab4ff;
+    --dash-on-accent: #000;
+    --dash-bg: #14162a;
+    --dash-card: #1b1e33;
+    --dash-panel: linear-gradient(150deg, #5d68b8 0%, #4a549e 55%, #6a75c4 100%);
+}
+.dash-nav { background: var(--dash-card); box-shadow: 0 1px 8px rgba(60, 70, 140, .08); }
+.dash-card { background: var(--dash-card); border: 0; border-radius: 1rem; box-shadow: 0 4px 20px rgba(60, 70, 140, .08); }
+.dash-card .table { --bs-table-bg: transparent; }
+.dash-info dt { font-weight: 500; color: var(--bs-secondary-color); }
+.btn-dash {
+    --bs-btn-bg: var(--dash-accent); --bs-btn-color: var(--dash-on-accent); --bs-btn-border-color: var(--dash-accent);
+    --bs-btn-hover-bg: var(--dash-accent); --bs-btn-hover-color: var(--dash-on-accent); --bs-btn-hover-border-color: var(--dash-accent);
+    --bs-btn-active-bg: var(--dash-accent); --bs-btn-active-color: var(--dash-on-accent); --bs-btn-active-border-color: var(--dash-accent);
+    --bs-btn-disabled-bg: var(--dash-accent); --bs-btn-disabled-color: var(--dash-on-accent); --bs-btn-disabled-border-color: var(--dash-accent);
+}
+.btn-dash:hover, .btn-dash:focus-visible { filter: brightness(1.08); }
+.btn-dash-outline {
+    --bs-btn-color: var(--dash-accent); --bs-btn-border-color: var(--dash-accent);
+    --bs-btn-hover-bg: var(--dash-accent); --bs-btn-hover-color: var(--dash-on-accent); --bs-btn-hover-border-color: var(--dash-accent);
+    --bs-btn-active-bg: var(--dash-accent); --bs-btn-active-color: var(--dash-on-accent); --bs-btn-active-border-color: var(--dash-accent);
+    --bs-btn-disabled-color: var(--dash-accent); --bs-btn-disabled-border-color: var(--dash-accent);
+}
+.avatar-lg { width: 6rem; height: 6rem; font-size: 2rem; flex-shrink: 0; }
+.pay-card {
+    background: var(--dash-panel); color: #fff; border-radius: .9rem;
+    padding: 1.1rem 1.25rem; aspect-ratio: 1.586; max-width: 24rem; width: 100%;
+    display: flex; flex-direction: column; justify-content: space-between;
+    box-shadow: 0 8px 24px rgba(80, 92, 190, .3);
+}
+.pay-card-num { font-size: 1.15rem; letter-spacing: .12em; }
+.pay-card-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
+.pay-card-cur { font-size: .75rem; font-weight: 600; padding: .1rem .5rem; border-radius: 999px; background: rgba(255, 255, 255, .25); }
+
 /* ---------- Auth (login / signup) page ---------- */
 .auth-body {
     --auth-accent: #6f7fe0;

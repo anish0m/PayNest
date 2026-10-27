@@ -35,8 +35,8 @@
         const active = w.status === 'ACTIVE';
         openBtn.disabled = !active;
         sendBtn.disabled = !active;
-        idEl.textContent = 'Wallet ID #' + w.id;
-        idEl.classList.remove('d-none');
+        idEl.textContent = '#' + w.id;
+        document.getElementById('card-number').textContent = '•••• •••• •••• ' + String(w.id).padStart(4, '0').slice(-4);
         lockedEl.textContent = active ? '' : (LOCKED_MSG[w.status] || 'Money movement is disabled for this wallet.');
         lockedEl.classList.toggle('d-none', active);
     }
