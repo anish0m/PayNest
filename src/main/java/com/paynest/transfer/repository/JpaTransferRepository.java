@@ -5,6 +5,8 @@ import com.paynest.transfer.model.Transfer;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -53,5 +55,11 @@ public class JpaTransferRepository implements TransferRepository {
     @Transactional(readOnly = true)
     public List<Transfer> findByReceiverWalletId(Long walletId) {
         return transfers.findByReceiverWalletIdOrderByCreatedAtDesc(walletId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Transfer> findByWalletId(Long walletId, Pageable pageable) {
+        return transfers.findByWalletId(walletId, pageable);
     }
 }

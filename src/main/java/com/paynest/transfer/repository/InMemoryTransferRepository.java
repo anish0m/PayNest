@@ -4,6 +4,9 @@ import com.paynest.transfer.model.Transfer;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Comparator;
 import java.util.List;
@@ -51,5 +54,29 @@ public class InMemoryTransferRepository implements TransferRepository {
                         transfer.getReceiverWalletId(), walletId))
                 .sorted(CREATED_AT_DESC)
                 .toList();
+    }
+
+    @Override
+    public Page<Transfer> findByWalletId(Long walletId, Pageable pageable) {
+        List<Transfer> matchingTransfers = transfersById.values().stream()
+                .filter(transfer -> Objects.equals(
+                        transfer.getSenderWalletId(), walletId)
+                        || Objects.equals(
+                        transfer.getReceiverWalletId(), walletId))
+                .sorted(CREATED_AT_DESC)
+                .toList();
+
+        int total = matchingTransfers.size();
+
+        long offset = Math.min(pageable.getOffset(), total);
+        int start = (int) offset;
+        int end = (int) Math.min(
+                offset + pageable.getPageSize(),
+                total);
+
+        List<Transfer> pageOfRows =
+                matchingTransfers.subList(start, end);
+
+        return new PageImpl<>(pageOfRows, pageable, total);
     }
 }
