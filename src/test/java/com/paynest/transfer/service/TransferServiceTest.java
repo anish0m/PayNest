@@ -17,6 +17,7 @@ import com.paynest.wallet.repository.InMemoryWalletRepository;
 import com.paynest.wallet.exception.WalletFrozenException;
 import com.paynest.wallet.model.WalletStatus;
 import com.paynest.wallet.exception.WalletNotFoundException;
+import com.paynest.wallet.service.WalletService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,14 @@ class TransferServiceTest {
         users = new InMemoryUserRepository();
         wallets = new InMemoryWalletRepository();
         transfers = new InMemoryTransferRepository();
-        service = new TransferService(wallets, transfers);
+
+        WalletService walletService =
+                new WalletService(wallets, users);
+
+        service = new TransferService(
+                wallets,
+                transfers,
+                walletService);
     }
 
     private Wallet walletWith(String email, String balance) {
