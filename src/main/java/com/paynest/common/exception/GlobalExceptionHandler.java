@@ -20,6 +20,7 @@ import com.paynest.wallet.exception.WalletFrozenException;
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.WalletAccessDeniedException;
+import com.paynest.transfer.exception.TransferNotFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,6 +30,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleUserNotFound(UserNotFoundException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, e.getMessage());
+        problem.setTitle("Not Found");
+        return problem;
+    }
+
+    @ExceptionHandler(TransferNotFoundException.class)
+    public ProblemDetail handleTransferNotFound(
+            TransferNotFoundException e) {
+
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, e.getMessage());
         problem.setTitle("Not Found");

@@ -5,6 +5,7 @@ import com.paynest.transfer.repository.TransferRepository;
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.WalletAccessDeniedException;
+import com.paynest.transfer.exception.TransferNotFoundException;
 
 import com.paynest.wallet.service.WalletService;
 import com.paynest.wallet.model.Wallet;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Objects;
+import java.util.UUID;
 
 import java.math.BigDecimal;
 
@@ -118,5 +120,31 @@ public class TransferService {
         }
 
         return transfers.findByWalletId(walletId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Transfer findById(UUID transferId, String callerEmail) {
+
+        // Existence is checked first, matching history(): unknown transfers
+        // return 404; existing transfers owned by someone else return 403.
+        Transfer transfer = transfers.findById(transferId)
+                .orElseThrow(() ->
+                        new TransferNotFoundException(transferId));
+
+        Wallet callerWallet = walletService.getByEmail(callerEmail);
+
+        boolean isSender = Objects.equals(
+                transfer.getSenderWalletId(),
+                callerWallet.getId());
+
+        boolean isReceiver = Objects.equals(
+                transfer.getReceiverWalletId(),
+                callerWallet.getId());
+
+        if (!isSender && !isReceiver) {
+            throw new WalletAccessDeniedException(callerWallet.getId());
+        }
+
+        return transfer;
     }
 }

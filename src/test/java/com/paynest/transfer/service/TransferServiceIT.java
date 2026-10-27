@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 
@@ -221,5 +222,123 @@ class TransferServiceIT {
 
         assertEquals(0, balance.compareTo(new BigDecimal("100.00")));
         assertEquals(0, transferCount);
+    }
+
+    // ============================================================
+    // STEP 3(vii) — the test that CAN catch `==` in findById's gate
+    // ============================================================
+    //
+    // WHY THIS LIVES HERE AND NOT IN TransferServiceTest:
+    // we ran the mutation. Replacing Objects.equals with == in findById's
+    // ownership gate left all 12 unit tests GREEN, and no arrangement of
+    // walletWithIdAboveLongCache can change that. The reason is the fake:
+    // InMemoryWalletRepository.assignId reflects ONE Long instance into the
+    // wallet's id field, and findById hands back that same Wallet from its
+    // map. Transfer was built from sender.getId(). So both sides of the
+    // comparison are literally the same object — `==` compares a reference
+    // to itself, no boxing happens, and the Long cache is never involved.
+    // Pushing the id past 127 is irrelevant when nothing is being boxed.
+    //
+    // (That helper DOES work in the unit test's self-transfer case, but only
+    // because that test builds two distinct instances with Long.valueOf(...)
+    // by hand — see its KEEP comment. The 200-wallet loop was never the
+    // mechanism; the two separate instances were. Worth re-reading.)
+    //
+    // Against PostgreSQL the shape is different and the mutation becomes
+    // detectable: the transfer row and the wallet row are loaded by SEPARATE
+    // queries, so Hibernate materialises SEPARATE Long objects for
+    // transfer.getSenderWalletId() and callerWallet.getId(). Equal values,
+    // different references — exactly where `==` is wrong and `equals` is right.
+    //
+    // ⚠️ THE IDS MUST EXCEED 127 FOR THIS TO PROVE ANYTHING. Postgres
+    // sequences are shared across this test DB and @BeforeEach only DELETEs
+    // rows — it never resets the sequence — so ids are usually already large.
+    // "Usually" is not a test. ASSERT it, the way the unit helper does:
+    //
+    //     assertTrue(sender.getId() > 127L, "id must be outside the Long cache");
+    //
+    // ⚠️ assertTrue IS NOT IMPORTED IN THIS FILE YET — only assertEquals and
+    // assertThrows are. Add:
+    //     import static org.junit.jupiter.api.Assertions.assertTrue;
+    // I did not add it for you, because an unused import sitting in your tree
+    // is its own small lie about what the file does.
+    //
+    // Without that assertion this test could silently stop proving anything if
+    // the DB is ever recreated, and it would still pass. A passing assertion
+    // on data that cannot fail proves nothing.
+    //
+    // YOUR TASK:
+    //
+    //   @Test
+    //   void detailsOwnershipComparesIdsByValueNotByReference() {
+    //
+    @Test
+    void detailsOwnershipComparesIdsByValueNotByReference() {
+    //
+    //   1. Wallet sender   = fundedWallet("details-sender@example.com",   "100.00");
+    //      Wallet receiver = fundedWallet("details-receiver@example.com", "10.00");
+    //
+        Wallet sender = fundedWallet(
+                "details-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "details-receiver@example.com",
+                "10.00");
+    //
+    //   2. assertTrue on BOTH ids being > 127L (see above)
+    //
+        assertTrue(
+                sender.getId() > 127L,
+                "sender wallet id must be outside the Long cache");
+
+        assertTrue(
+                receiver.getId() > 127L,
+                "receiver wallet id must be outside the Long cache");
+    //
+    //   3. var transfer = transfers.transfer(
+    //              sender.getId(), receiver.getId(), new BigDecimal("25.00"));
+    //
+        var transfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+    //
+    //   4. act as the RECEIVER — this is the side the unit test could not
+    //      protect, and it exercises isReceiver:
+    //
+    //        var found = transfers.findById(
+    //                transfer.getId(), "details-receiver@example.com");
+    //
+        var found = transfers.findById(
+                transfer.getId(),
+                "details-receiver@example.com");
+    //
+    //   5. assertEquals(transfer.getId(), found.getId());
+    //
+        assertEquals(transfer.getId(), found.getId());
+    //
+    // ⚠️ fundedWallet CREATES THE USER TOO, so getByEmail can resolve the
+    // caller: it goes users.getByEmail(email) -> wallets.findByUserId(...).
+    // That second query is precisely what produces the distinct Long. Pass the
+    // SAME email string you handed fundedWallet, or you get a 404 from
+    // WalletNotFoundException(String) and the test fails on the wrong thing.
+    //
+    // ⚠️ DO NOT ADD @Transactional, and do not remove the @AfterEach. This
+    // suite commits; the class comment at the top explains both. Your two new
+    // rows are cleaned by the existing deleteAllRows().
+    //
+    // THEN VERIFY IT BITES — this is the whole point of the test:
+    //   mutate findById's gate to
+    //       transfer.getReceiverWalletId() == callerWallet.getId()
+    //   and run `./mvnw test`. THIS test must go RED with
+    //   WalletAccessDeniedException while all 12 unit tests stay GREEN.
+    //   That contrast IS the finding: it shows the unit suite is blind here
+    //   and the IT is not. Restore the gate and confirm 91/91.
+    //
+    // ⚠️ If it stays green under the mutation, do not assume the test is
+    // wrong — print both ids and their System.identityHashCode first. Same
+    // reference means something upstream is sharing the instance, and that is
+    // a more interesting finding than the test.
     }
 }

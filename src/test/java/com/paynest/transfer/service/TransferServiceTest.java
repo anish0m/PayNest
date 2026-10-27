@@ -4,6 +4,8 @@ import com.paynest.transfer.repository.TransferRepository;
 import com.paynest.transfer.repository.InMemoryTransferRepository;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.InsufficientFundsException;
+import com.paynest.transfer.exception.TransferNotFoundException;
+import com.paynest.transfer.exception.WalletAccessDeniedException;
 import com.paynest.transfer.model.Transfer;
 import com.paynest.transfer.model.TransferStatus;
 
@@ -27,6 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+
+import java.util.UUID;
 
 class TransferServiceTest {
 
@@ -221,4 +225,69 @@ class TransferServiceTest {
         assertEquals(receiver.getId(), transfer.getReceiverWalletId());
     }
 
+    @Test
+    void detailsReturnsTheTransferForTheSender() {
+        Wallet sender = walletWith("sender@example.com", "100.00");
+        Wallet receiver = walletWith("receiver@example.com", "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        Transfer result = service.findById(
+                transfer.getId(),
+                "sender@example.com");
+
+        assertEquals(transfer.getId(), result.getId());
+    }
+
+    @Test
+    void detailsReturnsTheTransferForTheReceiver() {
+        Wallet sender = walletWithIdAboveLongCache(
+                "sender@example.com",
+                "100.00");
+        Wallet receiver = walletWith("receiver@example.com", "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        Transfer result = service.findById(
+                transfer.getId(),
+                "receiver@example.com");
+
+        assertEquals(transfer.getId(), result.getId());
+    }
+
+    @Test
+    void detailsIsRejectedForAWalletOnNeitherSide() {
+        Wallet sender = walletWith("sender@example.com", "100.00");
+        Wallet receiver = walletWith("receiver@example.com", "30.00");
+
+        walletWith("outsider@example.com", "50.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        assertThrows(
+                WalletAccessDeniedException.class,
+                () -> service.findById(
+                        transfer.getId(),
+                        "outsider@example.com"));
+    }
+
+    @Test
+    void detailsThrowsTransferNotFoundForAnUnknownId() {
+        walletWith("sender@example.com", "100.00");
+
+        assertThrows(
+                TransferNotFoundException.class,
+                () -> service.findById(
+                        UUID.randomUUID(),
+                        "sender@example.com"));
+    }
 }

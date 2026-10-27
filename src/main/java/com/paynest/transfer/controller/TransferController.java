@@ -19,6 +19,8 @@ import org.springframework.data.web.PageableDefault;
 
 import java.security.Principal;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/transfers")
 public class TransferController {
@@ -59,5 +61,12 @@ public class TransferController {
                 .map(TransferResponse::from);
     }
 
-    // Errors are mapped by GlobalExceptionHandler; no try/catch belongs here.
+    @GetMapping("/{transferId}")
+    public TransferResponse details(
+            Principal principal,
+            @PathVariable UUID transferId) {
+
+        return TransferResponse.from(
+                transfers.findById(transferId, principal.getName()));
+    }
 }
