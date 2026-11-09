@@ -1,6 +1,7 @@
 package com.paynest.transfer.repository;
 
 import com.paynest.transfer.model.Transfer;
+import com.paynest.transfer.dto.TransferFilter;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
@@ -59,7 +60,18 @@ public class JpaTransferRepository implements TransferRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Transfer> findByWalletId(Long walletId, Pageable pageable) {
-        return transfers.findByWalletId(walletId, pageable);
+    public Page<Transfer> findByWalletId(
+            Long walletId,
+            TransferFilter filter,
+            Pageable pageable) {
+
+        return transfers.findByWalletId(
+                walletId,
+                filter.status(),
+                filter.from(),
+                filter.to(),
+                filter.minAmount(),
+                filter.maxAmount(),
+                pageable);
     }
 }

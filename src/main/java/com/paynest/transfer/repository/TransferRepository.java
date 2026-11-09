@@ -1,6 +1,7 @@
 package com.paynest.transfer.repository;
 
 import com.paynest.transfer.model.Transfer;
+import com.paynest.transfer.dto.TransferFilter;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,11 +21,17 @@ public interface TransferRepository {
     List<Transfer> findByReceiverWalletId(Long walletId);
 
     /**
-     * Returns the wallet's transfers across both sender and receiver sides,
-     * ordered by createdAt descending and fetched using offset pagination.
+     * Returns the wallet's transfers across both sender and receiver sides that
+     * match the supplied filter, ordered by createdAt descending and fetched using
+     * offset pagination. Every caller must supply a non-null filter; an all-null
+     * filter means no additional constraints.
      *
      * <p>Because this uses offset pagination, concurrent inserts may cause
      * duplicate or skipped rows between page requests.</p>
      */
-    Page<Transfer> findByWalletId(Long walletId, Pageable pageable);
+    Page<Transfer> findByWalletId(
+            Long walletId,
+            TransferFilter filter,
+            Pageable pageable);
+
 }
