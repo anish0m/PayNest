@@ -40,24 +40,6 @@ public class InMemoryTransferRepository implements TransferRepository {
     }
 
     @Override
-    public List<Transfer> findBySenderWalletId(Long walletId) {
-        return transfersById.values().stream()
-                .filter(transfer -> Objects.equals(
-                        transfer.getSenderWalletId(), walletId))
-                .sorted(CREATED_AT_DESC)
-                .toList();
-    }
-
-    @Override
-    public List<Transfer> findByReceiverWalletId(Long walletId) {
-        return transfersById.values().stream()
-                .filter(transfer -> Objects.equals(
-                        transfer.getReceiverWalletId(), walletId))
-                .sorted(CREATED_AT_DESC)
-                .toList();
-    }
-
-    @Override
     public Page<Transfer> findByWalletId(
             Long walletId,
             TransferFilter filter,

@@ -55,7 +55,7 @@ public class TransferController {
     public Page<TransferResponse> history(
             Principal principal,
             @PathVariable Long walletId,
-            TransferFilter filter,
+            @Valid TransferFilter filter,
             @PageableDefault(size = 20) Pageable pageable) {
 
         // History is always newest-first; caller-provided sort is ignored.

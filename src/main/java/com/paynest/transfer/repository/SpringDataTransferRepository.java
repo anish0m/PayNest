@@ -16,10 +16,11 @@ import java.util.UUID;
 
 public interface SpringDataTransferRepository extends JpaRepository<Transfer, UUID> {
 
-    List<Transfer> findBySenderWalletIdOrderByCreatedAtDesc(Long walletId);
-
-    List<Transfer> findByReceiverWalletIdOrderByCreatedAtDesc(Long walletId);
-
+    // measured against 100,003 transfers in paynest.
+    // The history OR uses BitmapOr with both wallet/created_at indexes.
+    // Bitmap Heap Scan loses index order, so PostgreSQL uses a top-N Sort for createdAt DESC.
+    // A single sender branch uses an ordered Index Scan with no Sort (0.077 ms vs 9.606 ms).
+    // UNION ALL was considered but not adopted: both indexes are already used and the Sort stayed in memory.
     @Query("""
        SELECT t
        FROM Transfer t
@@ -40,5 +41,4 @@ public interface SpringDataTransferRepository extends JpaRepository<Transfer, UU
             @Param("minAmount") BigDecimal minAmount,
             @Param("maxAmount") BigDecimal maxAmount,
             Pageable pageable);
-
 }

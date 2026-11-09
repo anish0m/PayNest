@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.math.BigDecimal;
 
@@ -651,4 +652,325 @@ class TransferServiceIT {
     //  the fake is wrong and that is the finding.
     //  Then restore it, and verify the restore by reading the query back.
     // =======================================================================
+
+    // =======================================================================
+    //  DAY-09, STEP 5(vii) — THE DATE FILTER. The untested half of step 5.
+    //
+    //  ⚠️ WHY THIS IS A SEPARATE SUB-STEP AND NOT AN OPTIONAL EXTRA. I
+    //  checked what the suite currently executes:
+    //
+    //      TransferServiceTest : emptyFilter / statusFilter / amountRange
+    //      TransferServiceIT   : amountFilter x2
+    //
+    //  `grep -n Instant` over both test files finds **no test at all** that
+    //  sets `from` or `to`. So two of the five filter fields, and two of the
+    //  four CAST clauses you just added, have **never run**. The 101-green
+    //  suite is silent about them, and that silence is indistinguishable from
+    //  approval [[verify-steps-by-running-not-by-green-tests]].
+    //
+    //  Concretely, right now nothing in the build would catch:
+    //    * `>=` written as `>` on `from` (your javadoc promises inclusive)
+    //    * `<` written as `<=` on `to` (your javadoc promises half-open)
+    //    * from/to swapped at the unpack site in JpaTransferRepository
+    //    * `CAST(:from AS timestamp)` naming the wrong Hibernate type
+    //
+    //  ----------------------------------------------------------------------
+    //  5(vii)(1) THE `from` BOUNDARY IS INCLUSIVE.
+    //
+    //  ⚠️ THE HARD PART IS CONSTRUCTING THE DATA, NOT THE ASSERTION.
+    //  `createdAt` is `insertable = false` with `DEFAULT now()`, so you
+    //  cannot choose it. Three transfers created in a row land within
+    //  milliseconds of each other, so `Instant.now()` in the test does not
+    //  reliably fall between them — that is a clock race that passes locally
+    //  and fails in CI.
+    //
+    //  DO THIS INSTEAD: create the transfers, then READ a createdAt back off
+    //  a saved row and build the filter FROM that exact value:
+    //
+    //      Transfer second = ... ;              // the middle row
+    //      Instant boundary = second.getCreatedAt();
+    //      filter = from = boundary, everything else null
+    //
+    //  Now `from = boundary` tests `>=` against a row sitting EXACTLY on it.
+    //  Expect the middle row PRESENT (that is what inclusive means) plus any
+    //  row created after it. If you wrote `>`, the middle row vanishes and
+    //  this is the only test that would ever say so.
+    //
+    //  ⚠️ ORDERING CAVEAT: `now()` in Postgres is the TRANSACTION start time,
+    //  not statement time. Each `transfers.transfer(...)` here is its own
+    //  transaction, so the three timestamps do differ — but if you ever batch
+    //  them into one transaction they would be IDENTICAL and this test would
+    //  become meaningless while still passing. Assert the three createdAt
+    //  values are distinct before relying on them; a test built on data that
+    //  silently collapsed is the empty-page trap in a new shape
+    //  [[a-passing-assertion-on-empty-data-proves-nothing]].
+    //  ----------------------------------------------------------------------
+    @Test
+    void fromDateFilterIncludesTheTransferAtItsBoundary() {
+        Wallet sender = fundedWallet(
+                "date-filter-1-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "date-filter-1-receiver@example.com",
+                "10.00");
+
+        Transfer first = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("10.00"));
+
+        Transfer boundaryTransfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("20.00"));
+
+        Transfer laterTransfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("30.00"));
+
+        assertNotEquals(first.getCreatedAt(), boundaryTransfer.getCreatedAt());
+        assertNotEquals(boundaryTransfer.getCreatedAt(), laterTransfer.getCreatedAt());
+
+        assertTrue(first.getCreatedAt().isBefore(
+                boundaryTransfer.getCreatedAt()));
+        assertTrue(boundaryTransfer.getCreatedAt().isBefore(
+                laterTransfer.getCreatedAt()));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                boundaryTransfer.getCreatedAt(),
+                null,
+                null,
+                null);
+
+        var page = transfers.history(
+                sender.getId(),
+                "date-filter-1-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(2, page.getTotalElements());
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(
+                        boundaryTransfer.getId())));
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(
+                        laterTransfer.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(first.getId())));
+    }
+    //  ----------------------------------------------------------------------
+    //  5(vii)(2) THE `to` BOUNDARY IS EXCLUSIVE.
+    //
+    //  Same construction, opposite assertion: with `to = boundary`, the row
+    //  AT the boundary must be ABSENT, because your javadoc commits to
+    //  [from, to). Expect only rows strictly older than it.
+    //
+    //  ⚠️ WRITE THIS ONE EVEN THOUGH IT FEELS LIKE A MIRROR OF (1). The two
+    //  bounds use DIFFERENT operators in your query (`>=` and `<`), so they
+    //  are two independent facts. A single test covering both bounds cannot
+    //  distinguish "both correct" from "both inclusive" — and both-inclusive
+    //  is the single most likely way to write this.
+    //  ----------------------------------------------------------------------
+    @Test
+    void toDateFilterExcludesTheTransferAtItsBoundary() {
+        Wallet sender = fundedWallet(
+                "date-filter-2-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "date-filter-2-receiver@example.com",
+                "10.00");
+
+        Transfer first = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("10.00"));
+
+        Transfer boundaryTransfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("20.00"));
+
+        Transfer laterTransfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("30.00"));
+
+        assertNotEquals(first.getCreatedAt(), boundaryTransfer.getCreatedAt());
+        assertNotEquals(boundaryTransfer.getCreatedAt(), laterTransfer.getCreatedAt());
+
+        assertTrue(first.getCreatedAt().isBefore(
+                boundaryTransfer.getCreatedAt()));
+        assertTrue(boundaryTransfer.getCreatedAt().isBefore(
+                laterTransfer.getCreatedAt()));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                boundaryTransfer.getCreatedAt(),
+                null,
+                null);
+
+        var page = transfers.history(
+                sender.getId(),
+                "date-filter-2-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(1, page.getTotalElements());
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(first.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(
+                        boundaryTransfer.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(laterTransfer.getId())));
+    }
+    //  ----------------------------------------------------------------------
+    //  5(vii)(3) BOTH BOUNDS TOGETHER, AND THE SWAP.
+    //
+    //  Set `from` AND `to` to a window containing exactly one of three rows.
+    //  This is the only shape that can catch a from/to swap at the unpack
+    //  site: with one bound set a swap is invisible, because the other
+    //  parameter is null and its clause disappears.
+    //
+    //  ⚠️ ASSERT NON-EMPTY FIRST, then assert WHICH row. A swap returns an
+    //  empty page — `created_at >= to AND created_at < from` is unsatisfiable
+    //  — and "the excluded rows are absent" passes perfectly when everything
+    //  is absent.
+    //  ----------------------------------------------------------------------
+    @Test
+    void dateRangeWithBothBoundsReturnsOnlyTheTransferInsideTheWindow() {
+        Wallet sender = fundedWallet(
+                "date-filter-3-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "date-filter-3-receiver@example.com",
+                "10.00");
+
+        Transfer first = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("10.00"));
+
+        Transfer insideWindow = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("20.00"));
+
+        Transfer upperBoundary = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("30.00"));
+
+        assertNotEquals(first.getCreatedAt(), insideWindow.getCreatedAt());
+        assertNotEquals(insideWindow.getCreatedAt(), upperBoundary.getCreatedAt());
+
+        assertTrue(first.getCreatedAt().isBefore(insideWindow.getCreatedAt()));
+        assertTrue(insideWindow.getCreatedAt().isBefore(
+                upperBoundary.getCreatedAt()));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                insideWindow.getCreatedAt(),
+                upperBoundary.getCreatedAt(),
+                null,
+                null);
+
+        var page = transfers.history(
+                sender.getId(),
+                "date-filter-3-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(1, page.getTotalElements());
+        assertEquals(insideWindow.getId(), page.getContent().getFirst().getId());
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(first.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(upperBoundary.getId())));
+    }
+    //  ----------------------------------------------------------------------
+    //  ⚠️ CLEANUP: `deleteAllRows()` runs in @BeforeEach AND @AfterEach and
+    //  covers transfers/wallets/users, so new rows are handled — but use
+    //  unique emails (`date-filter-1@` ...) or `fundedWallet` throws
+    //  DuplicateEmailException from the arrange block
+    //  [[a-committing-test-suite-must-clean-up-after-itself]].
+    //
+    //  ⚠️ THE MUTATION THAT CLOSES 5(vii) — and PREDICT BEFORE RUNNING:
+    //  change `t.createdAt >= :from` to `t.createdAt > :from` in the @Query.
+    //  Write down which test, which assertion, which row. My prediction:
+    //  5(vii)(1) red on its "boundary row is present" assertion; 5(vii)(2)
+    //  GREEN (it only constrains `to`); all 3 unit filter tests GREEN (the
+    //  fake has no SQL, and none of them sets a date). If 5(vii)(3) also goes
+    //  red, say so — it means my model of which clause each test exercises is
+    //  wrong, and that is the finding.
+    //  Then restore, and verify the restore by reading the line back.
+    // =======================================================================
+
+    // =======================================================================
+    //  DAY-09, STEP 5(ix) — the 4-decimal-place experiment.
+    //
+    //  ⚠️ MOVED HERE BY ME, 9 Nov 2026. You wrote this test into
+    //  SpringDataTransferRepository.java — the repository INTERFACE, in
+    //  src/main/java. That is what broke the build:
+    //
+    //      SpringDataTransferRepository.java:[117,6] cannot find symbol
+    //        symbol: class Test
+    //
+    //  ⚠️ AND MY SCAFFOLD INVITED THAT. I put the 5(ix) decision box in the
+    //  repository file (correct — the CAST lives there) and then asked for a
+    //  test inside it (wrong — the test belongs where tests compile). A
+    //  scaffold must say WHICH FILE its code goes in when that differs from
+    //  the file the comment sits in. Mine did not.
+    //
+    //  Your test body is unchanged; only its home moved.
+    // =======================================================================
+    @Test
+    void amountFilterKeepsFourDecimalPlacesInItsMinimumBound() {
+        Wallet sender = fundedWallet(
+                "filter-scale-4dp-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "filter-scale-4dp-receiver@example.com",
+                "10.00");
+
+        Transfer belowMinimum = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.0001"));
+
+        Transfer atMinimum = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.0002"));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                null,
+                new BigDecimal("25.0002"),
+                null);
+
+        var page = transfers.history(
+                sender.getId(),
+                "filter-scale-4dp-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(1, page.getTotalElements());
+        assertEquals(atMinimum.getId(), page.getContent().getFirst().getId());
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(belowMinimum.getId())));
+    }
+
 }

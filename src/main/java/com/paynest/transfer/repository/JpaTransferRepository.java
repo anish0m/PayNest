@@ -48,18 +48,6 @@ public class JpaTransferRepository implements TransferRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Transfer> findBySenderWalletId(Long walletId) {
-        return transfers.findBySenderWalletIdOrderByCreatedAtDesc(walletId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Transfer> findByReceiverWalletId(Long walletId) {
-        return transfers.findByReceiverWalletIdOrderByCreatedAtDesc(walletId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public Page<Transfer> findByWalletId(
             Long walletId,
             TransferFilter filter,

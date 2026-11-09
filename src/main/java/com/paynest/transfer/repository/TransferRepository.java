@@ -16,10 +16,6 @@ public interface TransferRepository {
 
     Optional<Transfer> findById(UUID id);
 
-    List<Transfer> findBySenderWalletId(Long walletId);
-
-    List<Transfer> findByReceiverWalletId(Long walletId);
-
     /**
      * Returns the wallet's transfers across both sender and receiver sides that
      * match the supplied filter, ordered by createdAt descending and fetched using
@@ -33,5 +29,4 @@ public interface TransferRepository {
             Long walletId,
             TransferFilter filter,
             Pageable pageable);
-
 }
