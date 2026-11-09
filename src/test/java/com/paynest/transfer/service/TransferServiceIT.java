@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.math.BigDecimal;
 
@@ -26,6 +28,8 @@ import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.dto.TransferResponse;
 import com.paynest.transfer.model.TransferDirection;
+import com.paynest.transfer.dto.TransferFilter;
+import com.paynest.transfer.model.Transfer;
 
 // No @Transactional: the service's REQUIRED would join the test's transaction, leaving nothing to roll back.
 @SpringBootTest
@@ -459,4 +463,192 @@ class TransferServiceIT {
         assertEquals(TransferDirection.SENT, asSender.direction());
         assertEquals(TransferDirection.RECEIVED, asReceiver.direction());
     }
+
+    // =======================================================================
+    //  DAY-09, STEP 5(vi) — THE IT. THE ONLY TEST THAT CAN FIND STEP 5'S BUG.
+    //
+    //  Everything in 5(v) runs against chained .filter() calls. ONLY THIS
+    //  FILE executes the JPQL, so only this file can catch:
+    //      * the AND/OR precedence bug (the big one)
+    //      * a from/to or min/max swap at the unpack site
+    //      * a BigDecimal scale mismatch (25.00 vs NUMERIC(19,4) 25.0000)
+    //      * a `<` where you documented `<=`
+    //
+    //  Write TWO tests. They are not interchangeable.
+    //
+    //  ----------------------------------------------------------------------
+    //  5(vi)(1) THE PARENTHESIS TEST — write this one FIRST and deliberately.
+    //
+    //  THE SHAPE THAT CATCHES IT: the viewer must have a transfer they SENT
+    //  that the filter EXCLUDES.
+    //
+    //      wallet A (the viewer), wallets B and C
+    //      transfer 1:  A -> B   amount 10.00     <- SENT, must be EXCLUDED
+    //      transfer 2:  A -> C   amount 90.00     <- SENT, must be INCLUDED
+    //      transfer 3:  B -> A   amount 95.00     <- RECEIVED, INCLUDED
+    //
+    //      filter: minAmount = 50.00, everything else null
+    //      expect: exactly TWO rows (2 and 3); transfer 1 ABSENT.
+    //
+    //  WHY THIS EXACT SHAPE. With the parentheses wrong the query becomes
+    //  `sender = :w OR (receiver = :w AND amount >= :min)`, so EVERY sent
+    //  transfer comes back regardless of amount — and transfer 1 appears.
+    //  A test built only from RECEIVED rows passes under the bug. A test
+    //  whose sent rows all happen to match the filter passes under the bug.
+    //  The excluded-sent row is the whole test.
+    //
+    //  ⚠️ ASSERT THE ABSENCE SPECIFICALLY, by id: assert the page does not
+    //  contain transfer 1's id. `assertEquals(2, page.getTotalElements())`
+    //  alone is weaker than it looks — under the bug you would get 3, which
+    //  it does catch, but if a later edit changes the row count for an
+    //  unrelated reason the test fails without telling you why.
+    //
+    //  ⚠️ AND ASSERT NON-EMPTY FIRST. Both the swap failure modes and a
+    //  broken bind produce an empty page, which satisfies "transfer 1 is
+    //  absent" perfectly.
+    //  ----------------------------------------------------------------------
+    @Test
+    void amountFilterExcludesASentTransferAsWellAsIncludingMatchingRows() {
+        Wallet viewer = fundedWallet("filter-a@example.com", "100.00");
+        Wallet firstReceiver = fundedWallet("filter-b@example.com", "100.00");
+        Wallet secondReceiver = fundedWallet("filter-c@example.com", "10.00");
+
+        Transfer excludedSentTransfer = transfers.transfer(
+                viewer.getId(),
+                firstReceiver.getId(),
+                new BigDecimal("10.00"));
+
+        Transfer includedSentTransfer = transfers.transfer(
+                viewer.getId(),
+                secondReceiver.getId(),
+                new BigDecimal("90.00"));
+
+        Transfer includedReceivedTransfer = transfers.transfer(
+                firstReceiver.getId(),
+                viewer.getId(),
+                new BigDecimal("95.00"));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                null,
+                new BigDecimal("50.00"),
+                null);
+
+        var page = transfers.history(
+                viewer.getId(),
+                "filter-a@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(2, page.getTotalElements());
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(
+                        includedSentTransfer.getId())));
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(
+                        includedReceivedTransfer.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(
+                        excludedSentTransfer.getId())));
+    }
+    //  ----------------------------------------------------------------------
+    //  5(vi)(2) THE BOUNDARY + SCALE TEST.
+    //
+    //      amounts 25.00 and 50.00; filter minAmount = 25.00
+    //      expect: BOTH rows if you documented inclusive (>=)
+    //
+    //  ⚠️ THIS IS THE SCALE TEST TOO, and that is why it must be an IT.
+    //  You write "25.00"; Postgres stores and returns 25.0000. If anything
+    //  in the chain compares with equals rather than compareTo, the row on
+    //  the boundary vanishes HERE and nowhere else. Assert the returned
+    //  amount with compareTo, exactly as WalletRepositoryIT does for
+    //  wallets.balance.
+    //
+    //  ⚠️ IF YOU TEST THE DATE RANGE HERE: createdAt comes from the database
+    //  DEFAULT now(), so all rows land within milliseconds of each other and
+    //  you cannot construct a meaningful boundary by inserting normally. Read
+    //  an actual createdAt back off a saved transfer and build the filter
+    //  FROM that value — then `from = thatInstant` tests `>=` against a row
+    //  sitting exactly on it. Do not use Instant.now() in the test and hope
+    //  it straddles the rows; that is a clock race, and it will pass locally
+    //  and fail in CI.
+    //  ----------------------------------------------------------------------
+    @Test
+    void amountFilterIncludesTheMinimumBoundaryWithDatabaseScale() {
+        Wallet sender = fundedWallet("filter-scale-sender@example.com", "100.00");
+        Wallet receiver = fundedWallet("filter-scale-receiver@example.com", "10.00");
+
+        Transfer lowerBoundary = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        Transfer aboveBoundary = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("50.00"));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                null,
+                new BigDecimal("25.00"),
+                null);
+
+        var page = transfers.history(
+                sender.getId(),
+                "filter-scale-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(2, page.getTotalElements());
+
+        Transfer returnedLowerBoundary = page.getContent().stream()
+                .filter(transfer -> transfer.getId().equals(
+                        lowerBoundary.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        Transfer returnedAboveBoundary = page.getContent().stream()
+                .filter(transfer -> transfer.getId().equals(
+                        aboveBoundary.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(
+                0,
+                returnedLowerBoundary.getAmount().compareTo(
+                        new BigDecimal("25.00")));
+
+        assertEquals(
+                0,
+                returnedAboveBoundary.getAmount().compareTo(
+                        new BigDecimal("50.00")));
+    }
+    //  ----------------------------------------------------------------------
+    //  ⚠️ THIS CLASS COMMITS — no @Transactional. deleteAllRows() runs in
+    //  @BeforeEach AND @AfterEach and your new rows must be covered by it.
+    //  Three wallets and three transfers left behind will FK-break suites you
+    //  never touched [[a-committing-test-suite-must-clean-up-after-itself]].
+    //  Use fundedWallet() and unique emails (`filter-a@`, `filter-b@`,
+    //  `filter-c@`).
+    //
+    //  ⚠️ CHECK THE DATASOURCE BEFORE RUNNING. The jpa-it profile must point
+    //  at paynest_test [[it-profile-must-target-test-db]].
+    //
+    //  ⚠️ AND THE MUTATION THAT CLOSES STEP 5 — do this one, it is the point:
+    //  remove the parentheses around the sender-OR-receiver clause in the
+    //  @Query, so it reads
+    //      WHERE t.senderWalletId = :walletId
+    //         OR t.receiverWalletId = :walletId AND (...filters...)
+    //  PREDICT FIRST, IN WRITING: which test, which assertion, what numbers.
+    //  My prediction: 5(vi)(1) red on the "transfer 1 is absent" assertion
+    //  (3 rows where 2 expected), and **every test in 5(v) still GREEN** —
+    //  because the fake has no SQL. If the unit tests go red too, my model of
+    //  the fake is wrong and that is the finding.
+    //  Then restore it, and verify the restore by reading the query back.
+    // =======================================================================
 }

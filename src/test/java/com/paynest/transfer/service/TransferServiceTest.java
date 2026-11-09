@@ -10,6 +10,7 @@ import com.paynest.transfer.model.Transfer;
 import com.paynest.transfer.model.TransferStatus;
 import com.paynest.transfer.model.TransferDirection;
 import com.paynest.transfer.dto.TransferResponse;
+import com.paynest.transfer.dto.TransferFilter;
 
 import com.paynest.user.repository.InMemoryUserRepository;
 import com.paynest.user.repository.UserRepository;
@@ -29,6 +30,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 
@@ -385,5 +389,128 @@ class TransferServiceTest {
                 sender.getId());
 
         assertEquals(TransferDirection.SENT, response.direction());
+    }
+
+    @Test
+    void emptyFilterReturnsEveryTransferForTheWallet() {
+        Wallet sender = walletWith("filter-1-sender@example.com", "100.00");
+        Wallet receiver = walletWith("filter-1-receiver@example.com", "10.00");
+
+        service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("10.00"));
+
+        service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("20.00"));
+
+        service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("30.00"));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        var page = service.history(
+                sender.getId(),
+                "filter-1-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(3, page.getTotalElements());
+        assertEquals(3, page.getContent().size());
+    }
+
+    @Test
+    void statusFilterExcludesTransfersWithANonMatchingStatus() {
+        Wallet sender = walletWith("filter-2-sender@example.com", "100.00");
+        Wallet receiver = walletWith("filter-2-receiver@example.com", "10.00");
+
+        service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferFilter noFilter = new TransferFilter(
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        var allTransfers = service.history(
+                sender.getId(),
+                "filter-2-sender@example.com",
+                noFilter,
+                PageRequest.of(0, 20));
+
+        TransferFilter pendingOnly = new TransferFilter(
+                TransferStatus.PENDING,
+                null,
+                null,
+                null,
+                null);
+
+        var pendingTransfers = service.history(
+                sender.getId(),
+                "filter-2-sender@example.com",
+                pendingOnly,
+                PageRequest.of(0, 20));
+
+        assertFalse(allTransfers.isEmpty());
+        assertEquals(1, allTransfers.getTotalElements());
+        assertTrue(pendingTransfers.isEmpty());
+        assertEquals(0, pendingTransfers.getTotalElements());
+    }
+
+    @Test
+    void amountRangeIncludesTransfersOnBothInclusiveBoundaries() {
+        Wallet sender = walletWith("filter-3-sender@example.com", "100.00");
+        Wallet receiver = walletWith("filter-3-receiver@example.com", "10.00");
+
+        Transfer belowRange = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("10.00"));
+
+        Transfer lowerBoundary = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        Transfer upperBoundary = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("50.00"));
+
+        TransferFilter filter = new TransferFilter(
+                null,
+                null,
+                null,
+                new BigDecimal("25.00"),
+                new BigDecimal("50.00"));
+
+        var page = service.history(
+                sender.getId(),
+                "filter-3-sender@example.com",
+                filter,
+                PageRequest.of(0, 20));
+
+        assertFalse(page.isEmpty());
+        assertEquals(2, page.getTotalElements());
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(lowerBoundary.getId())));
+        assertTrue(page.getContent().stream().anyMatch(
+                transfer -> transfer.getId().equals(upperBoundary.getId())));
+        assertTrue(page.getContent().stream().noneMatch(
+                transfer -> transfer.getId().equals(belowRange.getId())));
     }
 }
