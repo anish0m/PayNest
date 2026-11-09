@@ -3,6 +3,8 @@ package com.paynest.transfer.controller;
 import com.paynest.transfer.dto.TransferRequest;
 import com.paynest.transfer.dto.TransferResponse;
 import com.paynest.transfer.service.TransferService;
+import com.paynest.transfer.dto.TransferFilter;
+
 import com.paynest.wallet.service.WalletService;
 
 import jakarta.validation.Valid;
@@ -53,15 +55,17 @@ public class TransferController {
     public Page<TransferResponse> history(
             Principal principal,
             @PathVariable Long walletId,
+            TransferFilter filter,
             @PageableDefault(size = 20) Pageable pageable) {
 
         // History is always newest-first; caller-provided sort is ignored.
         // history() already verifies that walletId belongs to the caller, so it is
         // the correct viewer without an additional wallet lookup.
         return transfers
-                .history(walletId, principal.getName(), pageable)
+                .history(walletId, principal.getName(), filter, pageable)
                 .map(transfer -> TransferResponse.from(transfer, walletId));
     }
+
 
     @GetMapping("/{transferId}")
     public TransferResponse details(
