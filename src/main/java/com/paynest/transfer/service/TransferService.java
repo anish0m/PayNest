@@ -6,6 +6,7 @@ import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.WalletAccessDeniedException;
 import com.paynest.transfer.exception.TransferNotFoundException;
+import com.paynest.transfer.dto.TransferFilter;
 
 import com.paynest.wallet.service.WalletService;
 import com.paynest.wallet.model.Wallet;
@@ -103,6 +104,7 @@ public class TransferService {
     public Page<Transfer> history(
             Long walletId,
             String callerEmail,
+            TransferFilter filter,
             Pageable pageable) {
 
         Wallet requestedWallet = wallets.findById(walletId)
@@ -119,7 +121,7 @@ public class TransferService {
             throw new WalletAccessDeniedException(walletId);
         }
 
-        return transfers.findByWalletId(walletId, pageable);
+        return transfers.findByWalletId(walletId, filter, pageable);
     }
 
     @Transactional(readOnly = true)
