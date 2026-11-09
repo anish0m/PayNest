@@ -8,6 +8,8 @@ import com.paynest.transfer.exception.TransferNotFoundException;
 import com.paynest.transfer.exception.WalletAccessDeniedException;
 import com.paynest.transfer.model.Transfer;
 import com.paynest.transfer.model.TransferStatus;
+import com.paynest.transfer.model.TransferDirection;
+import com.paynest.transfer.dto.TransferResponse;
 
 import com.paynest.user.repository.InMemoryUserRepository;
 import com.paynest.user.repository.UserRepository;
@@ -289,5 +291,99 @@ class TransferServiceTest {
                 () -> service.findById(
                         UUID.randomUUID(),
                         "sender@example.com"));
+    }
+
+    @Test
+    void directionIsSentWhenTheViewerIsTheSender() {
+        Wallet sender = walletWith(
+                "direction-sender-1@example.com",
+                "100.00");
+
+        Wallet receiver = walletWith(
+                "direction-receiver-1@example.com",
+                "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferResponse response = TransferResponse.from(
+                transfer,
+                sender.getId());
+
+        assertEquals(TransferDirection.SENT, response.direction());
+    }
+
+    @Test
+    void directionIsReceivedWhenTheViewerIsTheReceiver() {
+        Wallet sender = walletWith(
+                "direction-sender-2@example.com",
+                "100.00");
+
+        Wallet receiver = walletWith(
+                "direction-receiver-2@example.com",
+                "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferResponse response = TransferResponse.from(
+                transfer,
+                receiver.getId());
+
+        assertEquals(TransferDirection.RECEIVED, response.direction());
+    }
+
+    @Test
+    void theSameTransferRendersBothWaysForItsTwoParties() {
+        Wallet sender = walletWith(
+                "direction-sender-3@example.com",
+                "100.00");
+
+        Wallet receiver = walletWith(
+                "direction-receiver-3@example.com",
+                "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferResponse asSender = TransferResponse.from(
+                transfer,
+                sender.getId());
+
+        TransferResponse asReceiver = TransferResponse.from(
+                transfer,
+                receiver.getId());
+
+        assertEquals(TransferDirection.SENT, asSender.direction());
+        assertEquals(TransferDirection.RECEIVED, asReceiver.direction());
+        assertEquals(asSender.id(), asReceiver.id());
+    }
+
+    @Test
+    void directionIsSentOnTheResponseReturnedByATransfer() {
+        Wallet sender = walletWith(
+                "direction-sender-4@example.com",
+                "100.00");
+
+        Wallet receiver = walletWith(
+                "direction-receiver-4@example.com",
+                "30.00");
+
+        Transfer transfer = service.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferResponse response = TransferResponse.from(
+                transfer,
+                sender.getId());
+
+        assertEquals(TransferDirection.SENT, response.direction());
     }
 }

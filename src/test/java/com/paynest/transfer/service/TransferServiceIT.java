@@ -24,6 +24,8 @@ import com.paynest.wallet.model.Wallet;
 
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.InsufficientFundsException;
+import com.paynest.transfer.dto.TransferResponse;
+import com.paynest.transfer.model.TransferDirection;
 
 // No @Transactional: the service's REQUIRED would join the test's transaction, leaving nothing to roll back.
 @SpringBootTest
@@ -340,5 +342,121 @@ class TransferServiceIT {
     // wrong — print both ids and their System.identityHashCode first. Same
     // reference means something upstream is sharing the instance, and that is
     // a more interesting finding than the test.
+    }
+
+    // ============================================================
+    // Day-09 step 4(v) — SCAFFOLD. Comments only; you write the code.
+    //
+    // ONE test. Name it something like:
+    //     directionIsSentForTheSenderAndReceivedForTheSameRow
+    //
+    // WHY THIS BELONGS IN THE IT AND NOT THE UNIT SUITE
+    // 4(ii) compares viewerWalletId against transfer.getSenderWalletId()
+    // with Objects.equals. Step 3 proved — by mutation, not by argument —
+    // that this exact comparison is INVISIBLE to the unit suite: the
+    // in-memory fake reflects one Long instance into the wallet and hands
+    // the same Wallet back, so `==` compares a reference to itself and all
+    // 12 tests stay green. Against Postgres the transfer row and the wallet
+    // row arrive from separate queries, so you get two distinct Longs with
+    // equal values. Only here can `==` fail.
+    //
+    // WHAT TO BUILD
+    //   1. two funded wallets, via fundedWallet(...) — read its KEEP
+    //      comment above, it creates the User too, which getByEmail needs.
+    //      Use fresh emails, e.g. direction-sender@ / direction-receiver@.
+    //   2. assertTrue(sender.getId() > 127L, "...outside the Long cache")
+    //      and the same for the receiver. The test DB only DELETEs rows and
+    //      never resets the sequence, so large ids are LIKELY but not
+    //      guaranteed — assert the precondition rather than hoping for it.
+    //      (Same reasoning as the step-3 IT right above.)
+    //   3. one transfers.transfer(sender, receiver, 25.00).
+    //
+    // THE ASSERTION THAT MATTERS: ONE ROW, BOTH ANSWERS.
+    // Build the response twice from the SAME Transfer, changing only the
+    // viewer:
+    //
+    //     var asSender   = TransferResponse.from(transfer, sender.getId());
+    //     var asReceiver = TransferResponse.from(transfer, receiver.getId());
+    //
+    //     assertEquals(TransferDirection.SENT,     asSender.direction());
+    //     assertEquals(TransferDirection.RECEIVED, asReceiver.direction());
+    //
+    // Assert BOTH. A test that only checks SENT passes against a `from`
+    // that returns SENT unconditionally — and "always SENT" is the most
+    // likely way to get this wrong, because it is what you see while
+    // developing create(). Both halves, on one row, or the test proves
+    // nothing about per-viewer behaviour.
+    //
+    // You will need imports: TransferResponse (dto) and TransferDirection
+    // (model). Neither is imported in this file yet. Add them yourself —
+    // I am not planting imports for code you have not written.
+    //
+    // ALSO WORTH ASSERTING, same test or a second one: asSender.id() equals
+    // asReceiver.id(). It is the sentence "this is one row seen twice"
+    // written as an assertion, and it is what stops a future refactor from
+    // quietly building direction by cloning the transfer per viewer.
+    //
+    // THEN MUTATE, AND PREDICT BEFORE YOU RUN (write your predictions down
+    // first — step 3 is the cautionary tale: I predicted the == mutation
+    // would turn a unit test red, it stayed 12/12 green, and I guessed wrong
+    // twice more before reading the collaborator):
+    //
+    //   (a) Objects.equals -> == in 4(ii)'s comparison.
+    //       Expect: THIS test red on the SENT assertion — the viewer's Long
+    //       and the row's Long are different objects, so the sender is
+    //       misread as "not the sender" and renders RECEIVED. Expect the
+    //       whole unit suite to stay green. That contrast is the finding.
+    //
+    //   (b) invert the branch (sender -> RECEIVED, else SENT).
+    //       Expect: BOTH assertions red, in one test. If only one goes red,
+    //       your two viewers are not actually different — check step 2.
+    //
+    //   (c) make `from` ignore the viewer and always return SENT.
+    //       Expect: only the RECEIVED assertion red. This is the mutation
+    //       that justifies asserting both halves; if it stays green, the
+    //       test is decorative.
+    //
+    // Restore each one and verify by reading the line back, not by assuming.
+    // Expected suite total once 4(iv) and 4(v) are in: 97/97
+    // (TransferServiceTest 12 + 4 = 16, TransferServiceIT 5 + 1 = 6,
+    //  everything else unchanged at 74) — but TRUST THE RUN, NOT MY
+    //  ARITHMETIC. If the number differs, find out why before moving on;
+    //  a surprise count has caught a silently-skipped suite before.
+    // ============================================================
+
+    @Test
+    void directionIsSentForTheSenderAndReceivedForTheSameRow() {
+        Wallet sender = fundedWallet(
+                "direction-sender@example.com",
+                "100.00");
+
+        Wallet receiver = fundedWallet(
+                "direction-receiver@example.com",
+                "10.00");
+
+        assertTrue(
+                sender.getId() > 127L,
+                "sender wallet id must be outside the Long cache");
+
+        assertTrue(
+                receiver.getId() > 127L,
+                "receiver wallet id must be outside the Long cache");
+
+        var transfer = transfers.transfer(
+                sender.getId(),
+                receiver.getId(),
+                new BigDecimal("25.00"));
+
+        TransferResponse asSender = TransferResponse.from(
+                transfer,
+                sender.getId());
+
+        TransferResponse asReceiver = TransferResponse.from(
+                transfer,
+                receiver.getId());
+
+        assertEquals(asSender.id(), asReceiver.id());
+        assertEquals(TransferDirection.SENT, asSender.direction());
+        assertEquals(TransferDirection.RECEIVED, asReceiver.direction());
     }
 }

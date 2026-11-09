@@ -2,7 +2,9 @@ package com.paynest.transfer.dto;
 
 import com.paynest.transfer.model.Transfer;
 import com.paynest.transfer.model.TransferStatus;
+import com.paynest.transfer.model.TransferDirection;
 
+import java.util.Objects;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,9 +15,19 @@ public record TransferResponse(
         String amount,
         TransferStatus status,
         Instant createdAt,
-        Instant completedAt) {
+        Instant completedAt,
+        TransferDirection direction) {
 
-    public static TransferResponse from(Transfer transfer) {
+    public static TransferResponse from(
+            Transfer transfer,
+            Long viewerWalletId) {
+
+        TransferDirection direction = Objects.equals(
+                transfer.getSenderWalletId(),
+                viewerWalletId)
+                ? TransferDirection.SENT
+                : TransferDirection.RECEIVED;
+
         return new TransferResponse(
                 transfer.getId(),
                 transfer.getSenderWalletId(),
@@ -23,6 +35,7 @@ public record TransferResponse(
                 transfer.getAmount().toPlainString(),
                 transfer.getStatus(),
                 transfer.getCreatedAt(),
-                transfer.getCompletedAt());
+                transfer.getCompletedAt(),
+                direction);
     }
 }

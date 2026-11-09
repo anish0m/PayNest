@@ -46,7 +46,7 @@ public class TransferController {
                 request.receiverWalletId(),
                 request.amount());
 
-        return TransferResponse.from(transfer);
+        return TransferResponse.from(transfer, senderWallet.getId());
     }
 
     @GetMapping("/wallets/{walletId}")
@@ -56,9 +56,11 @@ public class TransferController {
             @PageableDefault(size = 20) Pageable pageable) {
 
         // History is always newest-first; caller-provided sort is ignored.
+        // history() already verifies that walletId belongs to the caller, so it is
+        // the correct viewer without an additional wallet lookup.
         return transfers
                 .history(walletId, principal.getName(), pageable)
-                .map(TransferResponse::from);
+                .map(transfer -> TransferResponse.from(transfer, walletId));
     }
 
     @GetMapping("/{transferId}")
@@ -66,7 +68,10 @@ public class TransferController {
             Principal principal,
             @PathVariable UUID transferId) {
 
+        var viewerWallet = wallets.getByEmail(principal.getName());
+
         return TransferResponse.from(
-                transfers.findById(transferId, principal.getName()));
+                transfers.findById(transferId, principal.getName()),
+                viewerWallet.getId());
     }
 }
