@@ -66,6 +66,18 @@ public class TransferController {
                 .map(transfer -> TransferResponse.from(transfer, walletId));
     }
 
+    /*
+     * Observed on the wire, 2026-11-10:
+     * - insufficient funds -> 409 Conflict
+     * - self-transfer -> 422 Unprocessable Entity
+     * - unknown receiver or history wallet -> 404 Not Found
+     * - no Authorization header -> 401 Unauthorized
+     * - amount 0.00 -> 400 Bad Request
+     * - existing wallet not owned by the caller -> 403 Forbidden
+     *
+     * History checks whether the wallet exists before checking ownership:
+     * an unknown wallet returns 404, so unknown beats not-yours (403).
+     */
 
     @GetMapping("/{transferId}")
     public TransferResponse details(
