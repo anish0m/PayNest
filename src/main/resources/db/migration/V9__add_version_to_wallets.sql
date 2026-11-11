@@ -1,0 +1,164 @@
+-- ===========================================================================
+--  DAY-10, STEP 2(i) — V9: give a wallet row a revision number.
+--
+--  WHY V9. V8 (create_transfers) is the highest existing version. Same rule as
+--  V6 and V7: the number is a position in YOUR history, not a label for the
+--  change. Persona's equivalent column arrived in its V4 — same idea, different
+--  number, and the two must NOT be reconciled.
+--
+--  ⚠️ READ THIS BEFORE YOU TYPE ANYTHING. The suite has already applied V1-V8
+--  to paynest_test. Flyway stores a CHECKSUM of every applied file and
+--  re-validates it on the next start. That has two consequences today:
+--
+--    1. A NEW file (V9) is safe to write and rewrite freely — it has no stored
+--       checksum until it first applies.
+--    2. ⚠️ DO NOT EDIT V1-V8, not even to add a comment. Flyway checksums
+--       comment lines too. A comments-only edit to an applied migration breaks
+--       validation on the next boot and every IT in the project fails at
+--       startup for a reason that has nothing to do with the test. If you do it
+--       anyway, the fix is `flyway:repair`, which rewrites the stored checksum.
+--
+--  WHAT THIS COLUMN BUYS, AND WHAT IT DOES NOT.
+--
+--  Step 1 proved the lost update exists: two credits to one wallet, both
+--  committed without error, 80.00 expected and 30.0000 stored. Nothing threw.
+--  No constraint fired. The money simply was not there.
+--
+--  This column is how the database gets a way to NOTICE that. Hibernate will
+--  append the version it read to the WHERE clause of every UPDATE:
+--
+--      UPDATE wallets SET balance = ?, version = 1 WHERE id = ? AND version = 0
+--
+--  The thread that commits second finds version is already 1, matches ZERO
+--  rows, and Hibernate raises ObjectOptimisticLockingFailureException.
+--
+--  ⚠️ SAY THIS OUT LOUD, because it is the single most misunderstood thing
+--  about optimistic locking: @Version DETECTS, IT DOES NOT PREVENT. After this
+--  migration and step 3, the money is still not transferred — one of the two
+--  credits now FAILS LOUDLY instead of vanishing silently. That is a strict
+--  improvement (a visible error beats a wrong balance) but it is not a working
+--  transfer. The RETRY is what turns detection into correctness, and that is a
+--  later step. Do not let step 3 going green feel like the end of the day.
+-- ===========================================================================
+
+
+-- ---------------------------------------------------------------------------
+--  2(i)a. Add the column.
+--
+--  Four decisions. Three are the same shape as V6/V7 and one is different in a
+--  way worth noticing.
+--
+--  BIGINT, not INTEGER. The counter increments on every single update to the
+--  row, forever, and never resets. A wallet in a busy system is the most
+--  frequently updated row in this schema. INTEGER overflows at ~2.1 billion;
+--  BIGINT is two extra bytes against a number nobody will reach. Also it
+--  matches the Java type you will declare in 2(ii) — an INTEGER column against
+--  a Java `Long` works, but the mismatch is a papercut for no gain.
+--
+--  NOT NULL. Same argument as `status`, with a sharper edge. A null version is
+--  a row whose revision is unknown, and `WHERE version = NULL` matches nothing
+--  in SQL — not even another NULL. So a single null version would make that row
+--  permanently unupdatable through JPA, and the error would point at the UPDATE
+--  rather than at the data. There is no such thing as a wallet with no version.
+--
+--  DEFAULT 0. Required mechanically: you cannot add a NOT NULL column to a
+--  populated table without one, and `wallets` has rows. But know how much work
+--  this default is actually doing here, because it is LESS than it was in
+--  persona:
+--
+--      In persona, users had BOTH a JPA and a raw-JDBC repository. The JDBC one
+--      writes INSERT statements by hand and does not know the version field
+--      exists, so DEFAULT 0 was the only thing giving its rows a valid version.
+--
+--  ⚠️ PAYNEST HAS NO JDBC WALLET REPOSITORY. Check for yourself rather than
+--  taking this from me — `ls src/main/java/com/paynest/wallet/repository/`
+--  shows InMemory, Jpa and SpringData, and no Jdbc. So here DEFAULT 0 is doing
+--  two narrower jobs: backfilling the rows that already exist, and covering the
+--  one raw `INSERT INTO wallets` that does exist — in
+--  src/test/java/com/paynest/wallet/repository/WalletRepositoryIT.java. A test
+--  that hand-writes an INSERT is exactly a client that does not know about the
+--  new column, and it would start failing on NOT NULL without this default.
+--
+--  NO CHECK CONSTRAINT. V6 and V7 both added one; this column must not. A CHECK
+--  constrains a value to a known SET, and the valid set here is "every
+--  non-negative integer" — there is nothing to enumerate. You could write
+--  CHECK (version >= 0) and it would be harmless, but it would also be the kind
+--  of constraint that cannot fail, and an assertion that cannot fail is noise.
+--  ⚠️ Do not reach for `CHECK (version = 0)` on the theory that new rows start
+--  there: it would reject the second update to every wallet in the system.
+--
+--  Syntax:  ALTER TABLE <table> ADD COLUMN <name> <type> NOT NULL DEFAULT <v>;
+--
+--  Write it: table `wallets`, column `version`, BIGINT, NOT NULL, default 0.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE wallets
+    ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+
+-- ---------------------------------------------------------------------------
+--  2(i)b. Document it in the database.
+--
+--  Same audience as V6's and V7's COMMENT ON COLUMN: whoever has a psql prompt
+--  at 3am and has never opened this repo. And this is the column that MOST
+--  needs it, because it is the only one in the schema that no human and no
+--  business rule ever reads. Someone will find a BIGINT called `version`,
+--  assume it is a schema version or an API version, and "tidy it up".
+--
+--  Two facts to record, both invisible from SQL:
+--
+--    1. It is managed by Hibernate's @Version and MUST NOT be written by hand.
+--       ⚠️ An UPDATE in psql that sets other columns without bumping version
+--       does not break anything — but an UPDATE that sets `version` to an
+--       arbitrary number can make a concurrent commit succeed when it should
+--       have been rejected. The column's whole value is that only one writer
+--       controls it.
+--
+--    2. It is the lost-update detector, and it DETECTS rather than prevents —
+--       a conflict surfaces as an exception for the caller to retry, not as a
+--       value that was silently corrected.
+--
+--  Write a COMMENT ON COLUMN wallets.version carrying both.
+-- ---------------------------------------------------------------------------
+
+COMMENT ON COLUMN wallets.version IS
+    'Managed by Hibernate @Version for optimistic locking; detects lost-update conflicts for callers to retry.';
+
+-- ===========================================================================
+--  VERIFY — and verify more than "it ran".
+--
+--    1. Apply it. ⚠️ Note how it gets applied: running the suite is what
+--       migrates paynest_test. So `./mvnw test` is not a read-only act here —
+--       it writes schema. Then:
+--         SELECT version, description, success FROM flyway_schema_history
+--         ORDER BY installed_rank DESC LIMIT 3;
+--       Assert on `success`, never on a row count.
+--
+--    2. Confirm the column exists AND that existing rows were backfilled rather
+--       than left null:
+--         SELECT version, count(*) FROM wallets GROUP BY version;
+--       ⚠️ CHECK THE COUNT IS NON-ZERO FIRST. A GROUP BY over an empty table
+--       returns no rows, and "no rows" reads as a pass. This has bitten you
+--       before. paynest_test is cleaned by every suite's @AfterEach, so empty
+--       is the LIKELY reading, not the edge case — run this against `paynest`
+--       (your dev database, which has real wallets) if the test one is bare.
+--
+--    3. Prove the default applies to a row the application did not write:
+--         INSERT INTO wallets (user_id, balance, status) VALUES (
+--           (SELECT id FROM users LIMIT 1), 0, 'ACTIVE');
+--         SELECT id, balance, status, version FROM wallets ORDER BY id DESC LIMIT 1;
+--       Expect version 0 without having mentioned it. Then delete that row.
+--
+--    4. ⚠️ THE ONE THAT MATTERS, and it is a NEGATIVE result. Re-run step 1's
+--       test after this migration and BEFORE step 2(ii):
+--         ./mvnw -q test -Dtest=TransferConcurrencyIT
+--       It must STILL BE RED, still at the balance assertion, still reporting
+--       30.0000. A column that nothing reads changes no behaviour. If this test
+--       goes green on the strength of a migration alone, something other than
+--       what you think is making it pass, and you need to know that NOW rather
+--       than after step 3 when you would credit the fix.
+--
+--  NOTHING IN THE SUITE ASSERTS ON THIS SCHEMA. ddl-auto=validate will start
+--  caring the moment 2(ii) declares the field — and that is the real check on
+--  this file: a typo in the column name here surfaces as a validation failure
+--  at boot in 2(ii), not as a Flyway error now.
+-- ===========================================================================
