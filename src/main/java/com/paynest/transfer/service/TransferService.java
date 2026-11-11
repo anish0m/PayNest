@@ -1,29 +1,32 @@
 package com.paynest.transfer.service;
 
-import com.paynest.transfer.model.Transfer;
-import com.paynest.transfer.repository.TransferRepository;
+import com.paynest.transfer.dto.TransferFilter;
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.WalletAccessDeniedException;
 import com.paynest.transfer.exception.TransferNotFoundException;
-import com.paynest.transfer.dto.TransferFilter;
+import com.paynest.transfer.model.Transfer;
+import com.paynest.transfer.repository.TransferRepository;
 
-import com.paynest.wallet.service.WalletService;
-import com.paynest.wallet.model.Wallet;
-import com.paynest.wallet.repository.WalletRepository;
 import com.paynest.wallet.exception.WalletNotFoundException;
 import com.paynest.wallet.exception.WalletFrozenException;
+import com.paynest.wallet.model.Wallet;
+import com.paynest.wallet.repository.WalletRepository;
+import com.paynest.wallet.service.WalletService;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import java.math.BigDecimal;
 
 import java.util.Objects;
 import java.util.UUID;
 
-import java.math.BigDecimal;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TransferService {
@@ -32,6 +35,10 @@ public class TransferService {
     private final TransferRepository transfers;
     private final WalletService walletService;
 
+    private static final int MAX_TRANSFER_ATTEMPTS = 3;
+
+    private TransferService self;
+
     public TransferService(
             WalletRepository wallets,
             TransferRepository transfers,
@@ -39,15 +46,39 @@ public class TransferService {
         this.wallets = wallets;
         this.transfers = transfers;
         this.walletService = walletService;
+        this.self = this;
     }
 
+    @Autowired(required = false)
+    public void setSelf(@Lazy TransferService self) {
+        this.self = self;
+    }
+
+    public Transfer transfer(
+            Long senderWalletId,
+            Long receiverWalletId,
+            BigDecimal amount) {
+
+        ObjectOptimisticLockingFailureException lastConflict = null;
+
+        for (int attempt = 1; attempt <= MAX_TRANSFER_ATTEMPTS; attempt++) {
+            try {
+                return self.attemptTransfer(
+                        senderWalletId, receiverWalletId, amount);
+            } catch (ObjectOptimisticLockingFailureException conflict) {
+                lastConflict = conflict;
+            }
+        }
+
+        throw lastConflict;
+    }
 
     // The debit, credit, and transfer record are atomic:
     // either all three are committed, or none are.
     @Transactional(
             propagation = Propagation.REQUIRED,
             rollbackFor = Exception.class)
-    public Transfer transfer(
+    public Transfer attemptTransfer(
             Long senderWalletId,
             Long receiverWalletId,
             BigDecimal amount) {
