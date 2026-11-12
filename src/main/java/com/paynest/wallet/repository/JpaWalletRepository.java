@@ -4,12 +4,12 @@ import com.paynest.wallet.model.Wallet;
 
 import jakarta.persistence.EntityManager;
 
+import java.math.BigDecimal;
+import java.util.Optional;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.Optional;
 
 @Repository
 @Profile({"jpa", "jdbc"})
@@ -34,6 +34,12 @@ public class JpaWalletRepository implements WalletRepository {
     @Transactional(readOnly = true)
     public Optional<Wallet> findById(Long id) {
         return wallets.findById(id);
+    }
+
+    @Override
+    @Transactional
+    public Optional<Wallet> findByIdForUpdate(Long id) {
+        return wallets.findByIdForUpdate(id);
     }
 
     @Override

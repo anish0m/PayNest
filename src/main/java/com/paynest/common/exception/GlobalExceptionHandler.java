@@ -1,29 +1,30 @@
 package com.paynest.common.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import com.paynest.category.exception.CategoryInUseException;
 import com.paynest.category.exception.CategoryNotFoundException;
 import com.paynest.category.exception.DuplicateCategoryException;
 
-import com.paynest.user.exception.DuplicateEmailException;
-import com.paynest.user.exception.UserNotFoundException;
-import com.paynest.user.exception.InvalidCredentialsException;
-
-import com.paynest.wallet.exception.WalletNotFoundException;
-import com.paynest.wallet.exception.WalletFrozenException;
-
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
-import com.paynest.transfer.exception.WalletAccessDeniedException;
 import com.paynest.transfer.exception.TransferNotFoundException;
+import com.paynest.transfer.exception.WalletAccessDeniedException;
+
+import com.paynest.user.exception.DuplicateEmailException;
+import com.paynest.user.exception.InvalidCredentialsException;
+import com.paynest.user.exception.UserNotFoundException;
+
+import com.paynest.wallet.exception.WalletFrozenException;
+import com.paynest.wallet.exception.WalletNotFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -159,4 +160,14 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
-}
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLockingFailure(
+            ObjectOptimisticLockingFailureException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The transfer could not be completed because the wallet changed. Please retry the request.");
+        problem.setTitle("Temporary Conflict");
+        problem.setProperty("retryable", true);
+        return problem;
+    }

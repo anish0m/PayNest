@@ -19,6 +19,9 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -27,8 +30,6 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class TransferService {
@@ -88,13 +89,25 @@ public class TransferService {
             Long receiverWalletId,
             BigDecimal amount) {
 
-        Wallet sender = wallets.findById(senderWalletId)
-                .orElseThrow(() ->
-                        new WalletNotFoundException(senderWalletId));
+        Long firstWalletId = Math.min(senderWalletId, receiverWalletId);
+        Long secondWalletId = Math.max(senderWalletId, receiverWalletId);
 
-        Wallet receiver = wallets.findById(receiverWalletId)
+        Wallet firstWallet = wallets.findByIdForUpdate(firstWalletId)
                 .orElseThrow(() ->
-                        new WalletNotFoundException(receiverWalletId));
+                        new WalletNotFoundException(firstWalletId));
+
+        Wallet secondWallet = senderWalletId.equals(receiverWalletId)
+                ? firstWallet
+                : wallets.findByIdForUpdate(secondWalletId)
+                        .orElseThrow(() ->
+                                new WalletNotFoundException(secondWalletId));
+
+        Wallet sender = senderWalletId.equals(firstWalletId)
+                ? firstWallet
+                : secondWallet;
+        Wallet receiver = receiverWalletId.equals(firstWalletId)
+                ? firstWallet
+                : secondWallet;
 
         if (Objects.equals(senderWalletId, receiverWalletId)) {
             throw new SelfTransferException(senderWalletId);

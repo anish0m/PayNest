@@ -123,12 +123,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -337,40 +337,18 @@ class TransferConcurrencyIT {
 // ===========================================================================
 
     /**
-     * Two credits to one wallet at the same instant must not lose money.
+     * Concurrent credits to one wallet must be detected by optimistic locking.
      *
-     * <h2>This races the repository, not {@code transfer()} — option (b)</h2>
+     * <h2>This races the repository, not {@code transfer()} — option (a)</h2>
      *
-     * <p>The step offered two ways to stage the collision: (a) run two real
-     * {@code transfers.transfer(...)} calls and hope they interleave, or (b)
-     * drive the read-modify-write directly — {@code findById} → {@code credit()}
-     * → flush — inside two {@link TransactionTemplate} transactions held apart
-     * by latches. This test is (b), and the choice was deliberate.
+     * <p>The two {@link TransactionTemplate} transactions both read the same
+     * receiver balance before either writes. The resulting version conflict
+     * must reject exactly one credit; the persisted balance must reflect the
+     * one that committed.
      *
-     * <p>WHY. (a) is the more honest test and the less useful one. The window
-     * it needs is microseconds wide, so it fails intermittently or not at all,
-     * and an intermittent test is indistinguishable from a flaky one — nobody
-     * trusts it and eventually somebody deletes it. (b) makes the interleaving
-     * DETERMINISTIC: the latches guarantee both transactions have read before
-     * either writes, so the lost update happens on every run. It failed on the
-     * first attempt, not one run in fifty.
-     *
-     * <p>⚠️ WHAT IT COSTS, and this is the part worth writing down rather than
-     * leaving as an accident. This test does not call {@link TransferService}
-     * at all. {@code senderA} and {@code senderB} are funded and never debited;
-     * the {@code transfers} field is unused. So <b>nothing here can observe
-     * anything {@code transfer()} does</b> — not the debit, not the funds gate,
-     * not the ordering of the two writes, and in particular not the retry that
-     * arrives in a later step. A broken retry would leave this test perfectly
-     * green.
-     *
-     * <p>That is exactly the hole that let persona's retry mutation survive 93
-     * green tests. The gap is covered by a separate test that goes through
-     * {@code transfer()} and asserts BOTH balances afterwards — the unused
-     * senders here are the reminder that it is still owed, not dead weight.
-     *
-     * <p>Read as a pair: this test proves the anomaly EXISTS; only a test
-     * through {@code transfer()} can prove the application HANDLES it.
+     * <p>This deliberately calls the repository directly rather than
+     * {@code transfers.transfer()}, so it proves that {@code @Version} detects
+     * the conflict in isolation; it does not exercise the service retry loop.
      */
     @Test
     void twoSimultaneousCreditsToOneWalletDoNotLoseMoney() throws Exception {
@@ -453,9 +431,19 @@ class TransferConcurrencyIT {
                 "both transactions should have read the same receiver balance"
         );
 
-        assertNull(failureA.get(), () -> "first transaction failed: " + failureA.get());
-        assertNull(failureB.get(), () -> "second transaction failed: " + failureB.get());
+        assertTrue(
+                (failureA.get() == null) != (failureB.get() == null),
+                "exactly one transaction should fail; failureA=" + failureA.get()
+                        + ", failureB=" + failureB.get()
+        );
 
+        Throwable conflict = failureA.get() != null ? failureA.get() : failureB.get();
+        assertTrue(
+                conflict instanceof ObjectOptimisticLockingFailureException,
+                () -> "expected an optimistic-locking conflict, but was " + conflict
+        );
+
+        BigDecimal expectedBalance = failureA.get() != null ? amountB : amountA;
         BigDecimal finalBalance = jdbc
                 .sql("SELECT balance FROM wallets WHERE id = ?")
                 .param(receiver.getId())
@@ -464,8 +452,81 @@ class TransferConcurrencyIT {
 
         assertEquals(
                 0,
-                finalBalance.compareTo(new BigDecimal("80.00")),
-                () -> "lost money: expected receiver balance 80.00 but was " + finalBalance
+                finalBalance.compareTo(expectedBalance),
+                () -> "expected receiver balance " + expectedBalance + " but was " + finalBalance
         );
+    }
+
+    @Test
+    void simultaneousTransfersInOppositeDirectionsCompleteWithoutDeadlock() throws Exception {
+        Wallet walletA = fundedWallet("deadlock-a@example.com", "100.00");
+        Wallet walletB = fundedWallet("deadlock-b@example.com", "100.00");
+        BigDecimal amount = new BigDecimal("10.00");
+
+        CountDownLatch bothReady = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> failureA = new AtomicReference<>();
+        AtomicReference<Throwable> failureB = new AtomicReference<>();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        executor.submit(() -> {
+            bothReady.countDown();
+            try {
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError("timed out waiting to start transfer A -> B");
+                }
+                transfers.transfer(walletA.getId(), walletB.getId(), amount);
+            } catch (Throwable throwable) {
+                failureA.set(throwable);
+            }
+        });
+
+        executor.submit(() -> {
+            bothReady.countDown();
+            try {
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError("timed out waiting to start transfer B -> A");
+                }
+                transfers.transfer(walletB.getId(), walletA.getId(), amount);
+            } catch (Throwable throwable) {
+                failureB.set(throwable);
+            }
+        });
+
+        boolean bothReadyInTime = bothReady.await(10, TimeUnit.SECONDS);
+        start.countDown();
+        executor.shutdown();
+
+        assertTrue(bothReadyInTime, "both transfer tasks should be ready");
+        assertTrue(
+                executor.awaitTermination(10, TimeUnit.SECONDS),
+                "both transfer tasks should finish"
+        );
+        assertTrue(
+                failureA.get() == null && failureB.get() == null,
+                () -> "both transfers should complete; A -> B=" + failureA.get()
+                        + ", B -> A=" + failureB.get()
+        );
+
+        BigDecimal balanceA = jdbc.sql("SELECT balance FROM wallets WHERE id = ?")
+                .param(walletA.getId())
+                .query(BigDecimal.class)
+                .single();
+        BigDecimal balanceB = jdbc.sql("SELECT balance FROM wallets WHERE id = ?")
+                .param(walletB.getId())
+                .query(BigDecimal.class)
+                .single();
+
+        BigDecimal total = balanceA.add(balanceB);
+        assertEquals(
+                0,
+                total.compareTo(new BigDecimal("200.00")),
+                () -> "wallet balances should conserve 200.00, but total was " + total
+        );
+
+        Long transferCount = jdbc.sql("SELECT COUNT(*) FROM transfers")
+                .query(Long.class)
+                .single();
+        assertEquals(2L, transferCount, "exactly two transfers should be recorded");
     }
 }

@@ -1,45 +1,46 @@
 package com.paynest.transfer.service;
 
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.PageRequest;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.paynest.user.repository.UserRepository;
 import com.paynest.user.model.User;
+import com.paynest.user.repository.UserRepository;
 
+import com.paynest.transfer.exception.InsufficientFundsException;
+import com.paynest.transfer.exception.SelfTransferException;
+import com.paynest.transfer.dto.TransferFilter;
+import com.paynest.transfer.dto.TransferResponse;
+import com.paynest.transfer.model.Transfer;
+import com.paynest.transfer.model.TransferDirection;
+
+import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.repository.JpaWalletRepository;
 import com.paynest.wallet.repository.SpringDataWalletRepository;
 import com.paynest.wallet.repository.WalletRepository;
-import com.paynest.wallet.model.Wallet;
 
-import com.paynest.transfer.exception.SelfTransferException;
-import com.paynest.transfer.exception.InsufficientFundsException;
-import com.paynest.transfer.dto.TransferResponse;
-import com.paynest.transfer.model.TransferDirection;
-import com.paynest.transfer.dto.TransferFilter;
-import com.paynest.transfer.model.Transfer;
+import java.math.BigDecimal;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.ActiveProfiles;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // No @Transactional: the service's REQUIRED would join the test's transaction, leaving nothing to roll back.
 @SpringBootTest
@@ -124,6 +125,15 @@ class TransferServiceIT {
                         jdbc.sql("UPDATE wallets SET version = version + 1 WHERE id = ?")
                                 .param(id)
                                 .update();
+                    }
+                    return wallet;
+                }
+
+                @Override
+                public Optional<Wallet> findByIdForUpdate(Long id) {
+                    Optional<Wallet> wallet = real.findByIdForUpdate(id);
+                    if (id.equals(receiverId)) {
+                        receiverReads.incrementAndGet();
                     }
                     return wallet;
                 }

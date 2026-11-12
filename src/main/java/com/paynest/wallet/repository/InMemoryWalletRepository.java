@@ -1,18 +1,19 @@
 package com.paynest.wallet.repository;
 
 import com.paynest.wallet.model.Wallet;
-import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Repository;
 
 import java.lang.reflect.Field;
 
 import java.math.BigDecimal;
 
-import java.util.Objects;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Repository;
 
 @Repository
 @Profile("test")
@@ -54,6 +55,11 @@ public class InMemoryWalletRepository implements WalletRepository {
     @Override
     public Optional<Wallet> findById(Long id) {
         return Optional.ofNullable(walletsById.get(id));
+    }
+
+    @Override
+    public Optional<Wallet> findByIdForUpdate(Long id) {
+        return findById(id);
     }
 
     @Override
