@@ -27,9 +27,13 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class TransferService {
+
+    private static final Logger logger = LoggerFactory.getLogger(TransferService.class);
 
     private final WalletRepository wallets;
     private final TransferRepository transfers;
@@ -67,6 +71,7 @@ public class TransferService {
                         senderWalletId, receiverWalletId, amount);
             } catch (ObjectOptimisticLockingFailureException conflict) {
                 lastConflict = conflict;
+                logger.warn("Transfer attempt {}: optimistic locking failed; retrying", attempt);
             }
         }
 

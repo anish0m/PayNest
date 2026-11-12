@@ -2,7 +2,11 @@ package com.paynest.transfer.service;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -18,11 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.paynest.user.repository.UserRepository;
 import com.paynest.user.model.User;
 
+import com.paynest.wallet.repository.JpaWalletRepository;
 import com.paynest.wallet.repository.SpringDataWalletRepository;
+import com.paynest.wallet.repository.WalletRepository;
 import com.paynest.wallet.model.Wallet;
 
 import com.paynest.transfer.exception.SelfTransferException;
@@ -35,6 +44,7 @@ import com.paynest.transfer.model.Transfer;
 // No @Transactional: the service's REQUIRED would join the test's transaction, leaving nothing to roll back.
 @SpringBootTest
 @ActiveProfiles({"jpa", "jpa-it"})
+@Import(TransferServiceIT.ConflictOnceConfig.class)
 class TransferServiceIT {
 
     @Autowired
@@ -66,6 +76,61 @@ class TransferServiceIT {
         deleteAllRows();
     }
 
+    @TestConfiguration
+    static class ConflictOnceConfig {
+
+        private static volatile Long receiverId;
+        private static final AtomicBoolean conflictPending = new AtomicBoolean();
+        private static final AtomicInteger receiverReads = new AtomicInteger();
+
+        static void armConflictOn(Long id) {
+            receiverId = id;
+            receiverReads.set(0);
+            conflictPending.set(true);
+        }
+
+        @Bean
+        @Primary
+        WalletRepository conflictOnceWalletRepository(
+                JpaWalletRepository real,
+                JdbcClient jdbc) {
+            return new WalletRepository() {
+                @Override
+                public Optional<Wallet> findByUserId(Long userId) {
+                    return real.findByUserId(userId);
+                }
+
+                @Override
+                public Wallet save(Wallet wallet) {
+                    return real.save(wallet);
+                }
+
+                @Override
+                public boolean existsByUserId(Long userId) {
+                    return real.existsByUserId(userId);
+                }
+
+                @Override
+                public int debitIfSufficient(Long walletId, BigDecimal amount) {
+                    return real.debitIfSufficient(walletId, amount);
+                }
+
+                @Override
+                public Optional<Wallet> findById(Long id) {
+                    Optional<Wallet> wallet = real.findById(id);
+                    if (id.equals(receiverId)
+                            && receiverReads.incrementAndGet() % 2 == 0
+                            && conflictPending.compareAndSet(true, false)) {
+                        jdbc.sql("UPDATE wallets SET version = version + 1 WHERE id = ?")
+                                .param(id)
+                                .update();
+                    }
+                    return wallet;
+                }
+            };
+        }
+    }
+
     // KEEP: the raw UPDATE funds the database row behind Hibernate's back, so
     // this returned Wallet still has balance 0. Use it only for its ID; read
     // balances through JdbcClient to avoid asserting against stale state.
@@ -82,6 +147,33 @@ class TransferServiceIT {
                 .update();
 
         return wallet;
+    }
+
+    @Test
+    void retriedTransferDebitsTheSenderOnlyOnce() {
+        Wallet sender = fundedWallet("retry-once-sender@example.com", "100.00");
+        Wallet receiver = fundedWallet("retry-once-receiver@example.com", "10.00");
+
+        ConflictOnceConfig.armConflictOn(receiver.getId());
+        transfers.transfer(sender.getId(), receiver.getId(), new BigDecimal("25.00"));
+
+        BigDecimal senderBalance = jdbc.sql(
+                        "SELECT balance FROM wallets WHERE id = ?")
+                .param(sender.getId())
+                .query(BigDecimal.class)
+                .single();
+        BigDecimal receiverBalance = jdbc.sql(
+                        "SELECT balance FROM wallets WHERE id = ?")
+                .param(receiver.getId())
+                .query(BigDecimal.class)
+                .single();
+        Integer transferCount = jdbc.sql("SELECT COUNT(*) FROM transfers")
+                .query(Integer.class)
+                .single();
+
+        assertEquals(0, new BigDecimal("75.00").compareTo(senderBalance));
+        assertEquals(0, new BigDecimal("35.00").compareTo(receiverBalance));
+        assertEquals(1, transferCount);
     }
 
     @Test
