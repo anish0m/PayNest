@@ -1,5 +1,7 @@
 package com.paynest.transfer.controller;
 
+import com.paynest.idempotency.service.IdempotencyService;
+
 import com.paynest.transfer.dto.TransferRequest;
 import com.paynest.transfer.dto.TransferResponse;
 import com.paynest.transfer.service.TransferService;
@@ -9,19 +11,21 @@ import com.paynest.wallet.service.WalletService;
 
 import jakarta.validation.Valid;
 
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import java.security.Principal;
+
+import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 
-import java.security.Principal;
-
-import java.util.UUID;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/transfers")
@@ -29,26 +33,73 @@ public class TransferController {
 
     private final TransferService transfers;
     private final WalletService wallets;
+    private final IdempotencyService idempotency;
 
     public TransferController(
             TransferService transfers,
-            WalletService wallets) {
+            WalletService wallets,
+            IdempotencyService idempotency) {
         this.transfers = transfers;
         this.wallets = wallets;
+        this.idempotency = idempotency;
     }
 
     @PostMapping
     public TransferResponse create(
             Principal principal,
+            @RequestHeader(
+                    value = "Idempotency-Key",
+                    required = false) String idempotencyKey,
             @Valid @RequestBody TransferRequest request) {
-        var senderWallet = wallets.getByEmail(principal.getName());
 
-        var transfer = transfers.transfer(
+        if (idempotencyKey == null) {
+            var senderWallet = wallets.getByEmail(principal.getName());
+
+            var transfer = transfers.transfer(
+                    senderWallet.getId(),
+                    request.receiverWalletId(),
+                    request.amount());
+
+            return TransferResponse.from(transfer, senderWallet.getId());
+        }
+
+        var senderWallet = wallets.getByEmail(principal.getName());
+        String scope = "transfer:" + senderWallet.getId();
+
+        String fingerprint = idempotency.fingerprint(
                 senderWallet.getId(),
                 request.receiverWalletId(),
                 request.amount());
 
-        return TransferResponse.from(transfer, senderWallet.getId());
+        var existing = idempotency.begin(
+                scope,
+                idempotencyKey,
+                fingerprint);
+
+        if (existing.isPresent()) {
+            var transfer = transfers.findById(
+                    existing.get().transferId(),
+                    principal.getName());
+
+            return TransferResponse.from(transfer, senderWallet.getId());
+        }
+
+        try {
+            var transfer = transfers.transfer(
+                    senderWallet.getId(),
+                    request.receiverWalletId(),
+                    request.amount());
+
+            idempotency.succeed(
+                    scope,
+                    idempotencyKey,
+                    transfer.getId());
+
+            return TransferResponse.from(transfer, senderWallet.getId());
+        } catch (RuntimeException e) {
+            idempotency.fail(scope, idempotencyKey);
+            throw e;
+        }
     }
 
     @GetMapping("/wallets/{walletId}")
