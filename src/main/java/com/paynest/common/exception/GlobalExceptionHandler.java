@@ -4,6 +4,9 @@ import com.paynest.category.exception.CategoryInUseException;
 import com.paynest.category.exception.CategoryNotFoundException;
 import com.paynest.category.exception.DuplicateCategoryException;
 
+import com.paynest.idempotency.exception.IdempotencyConflictException;
+import com.paynest.idempotency.exception.IdempotencyKeyReusedException;
+
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
 import com.paynest.transfer.exception.TransferNotFoundException;
@@ -171,3 +174,29 @@ public class GlobalExceptionHandler {
         problem.setProperty("retryable", true);
         return problem;
     }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(
+            IdempotencyConflictException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The request with this idempotency key is still being processed. Please retry.");
+        problem.setTitle("Temporary Conflict");
+        problem.setProperty("retryable", true);
+        problem.setProperty("idempotencyKey", e.getIdempotencyKey());
+        return problem;
+    }
+    @ExceptionHandler(IdempotencyKeyReusedException.class)
+    public ProblemDetail handleIdempotencyKeyReused(
+            IdempotencyKeyReusedException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "This idempotency key was already used for a different request.");
+        problem.setTitle("Unprocessable Entity");
+        problem.setProperty("retryable", false);
+        problem.setProperty("idempotencyKey", e.getIdempotencyKey());
+        return problem;
+    }
+}
