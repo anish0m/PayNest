@@ -7,6 +7,7 @@ import com.paynest.idempotency.model.IdempotencyStatus;
 import com.paynest.idempotency.repository.IdempotencyRepository;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,10 +73,18 @@ public class IdempotencyService {
             Long receiverWalletId,
             BigDecimal amount) {
 
+        BigDecimal amountInCents;
+        try {
+            amountInCents = amount.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(
+                    "Amount must have at most 2 decimal places", exception);
+        }
+
         // ':' cannot occur in numeric wallet IDs or a plain decimal amount.
         return senderWalletId + ":"
                 + receiverWalletId + ":"
-                + amount.setScale(2).toPlainString();
+                + amountInCents.toPlainString();
     }
 
     public Optional<IdempotencyRecord> begin(
