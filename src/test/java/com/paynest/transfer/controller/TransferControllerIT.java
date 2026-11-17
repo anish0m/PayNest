@@ -5,6 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.paynest.config.JwtService;
 
+import com.paynest.idempotency.model.IdempotencyRecord;
+import com.paynest.idempotency.model.IdempotencyStatus;
+import com.paynest.idempotency.repository.IdempotencyRepository;
+import com.paynest.idempotency.service.IdempotencyService;
+
 import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
 
@@ -14,6 +19,8 @@ import com.paynest.wallet.repository.SpringDataWalletRepository;
 import com.paynest.wallet.repository.WalletRepository;
 
 import java.math.BigDecimal;
+
+import java.time.Instant;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,6 +46,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -61,6 +69,12 @@ class TransferControllerIT {
     @Autowired
     private JdbcClient jdbc;
 
+    @Autowired
+    private IdempotencyService idempotencyService;
+
+    @Autowired
+    private IdempotencyRepository idempotencyRepository;
+
     @BeforeEach
     void clean() {
         deleteAllRows();
@@ -73,6 +87,7 @@ class TransferControllerIT {
     }
 
     private void deleteAllRows() {
+        jdbc.sql("DELETE FROM idempotency_keys").update();
         jdbc.sql("DELETE FROM transfers").update();
         jdbc.sql("DELETE FROM wallets").update();
         jdbc.sql("DELETE FROM users").update();
@@ -89,6 +104,45 @@ class TransferControllerIT {
                 .update();
 
         return wallet;
+    }
+
+    private HttpResponse<String> post(
+            String email,
+            String requestBody,
+            String idempotencyKey) throws Exception {
+
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/transfers"))
+                .header("Authorization", "Bearer " + jwtService.issueToken(email))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody));
+
+        if (idempotencyKey != null) {
+            request.header("Idempotency-Key", idempotencyKey);
+        }
+
+        return HttpClient.newHttpClient().send(
+                request.build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private long transferCount() {
+        return jdbc.sql("SELECT COUNT(*) FROM transfers")
+                .query(Long.class)
+                .single();
+    }
+
+    private long idempotencyKeyCount() {
+        return jdbc.sql("SELECT COUNT(*) FROM idempotency_keys")
+                .query(Long.class)
+                .single();
+    }
+
+    private BigDecimal walletBalance(Long walletId) {
+        return jdbc.sql("SELECT balance FROM wallets WHERE id = ?")
+                .param(walletId)
+                .query(BigDecimal.class)
+                .single();
     }
 
     @Test
@@ -126,6 +180,236 @@ class TransferControllerIT {
         assertFalse(detail.contains("Wallet"));
         assertFalse(detail.contains("#"));
         assertEquals(3, ConflictEveryAttemptConfig.injectedConflicts());
+    }
+
+    @Test
+    void repeatedPostWithTheSameKeyMovesMoneyOnce() throws Exception {
+        String senderEmail = "idempotent-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "100.00");
+        Wallet receiver = fundedWallet("idempotent-receiver@example.com", "0.00");
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 25.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> first = post(senderEmail, body, "retry-1");
+        HttpResponse<String> replay = post(senderEmail, body, "retry-1");
+
+        assertEquals(200, first.statusCode());
+        assertEquals(200, replay.statusCode());
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode firstResponse = mapper.readTree(first.body());
+        JsonNode replayResponse = mapper.readTree(replay.body());
+        String firstId = firstResponse.path("id").asText();
+        String replayId = replayResponse.path("id").asText();
+
+        assertEquals(firstId, replayId);
+        assertEquals(firstResponse, replayResponse);
+        assertEquals(1L, transferCount());
+        assertEquals(
+                0,
+                walletBalance(receiver.getId())
+                        .compareTo(new BigDecimal("25.00")));
+    }
+
+    @Test
+    void sameKeyWithADifferentAmountIs422AndMovesNoMoney() throws Exception {
+        String senderEmail = "reused-key-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "100.00");
+        Wallet receiver = fundedWallet("reused-key-receiver@example.com", "0.00");
+
+        String firstBody = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 25.00
+                }
+                """.formatted(receiver.getId());
+
+        String changedBody = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 500.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> first = post(senderEmail, firstBody, "reuse-1");
+        HttpResponse<String> reused = post(senderEmail, changedBody, "reuse-1");
+
+        assertEquals(200, first.statusCode());
+        assertEquals(422, reused.statusCode());
+
+        JsonNode problem = new ObjectMapper().readTree(reused.body());
+        assertEquals(422, problem.path("status").asInt());
+        assertTrue(
+                problem.has("retryable"),
+                () -> "no retryable field in body: " + reused.body());
+        assertFalse(problem.path("retryable").asBoolean());
+
+        assertEquals(1L, transferCount());
+        assertEquals(
+                0,
+                walletBalance(receiver.getId())
+                        .compareTo(new BigDecimal("25.00")));
+    }
+
+    @Test
+    void aKeyClaimedButNotSettledIs409Retryable() throws Exception {
+        String senderEmail = "in-progress-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "100.00");
+        Wallet receiver = fundedWallet("in-progress-receiver@example.com", "0.00");
+
+        BigDecimal amount = new BigDecimal("25.00");
+        String key = "in-progress-key";
+        String scope = "transfer:" + sender.getId();
+
+        String fingerprint = idempotencyService.fingerprint(
+                sender.getId(),
+                receiver.getId(),
+                amount);
+
+        assertTrue(idempotencyRepository.claim(new IdempotencyRecord(
+                scope,
+                key,
+                IdempotencyStatus.IN_PROGRESS,
+                null,
+                fingerprint,
+                Instant.now())).isEmpty());
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 25.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> blocked = post(senderEmail, body, key);
+
+        assertEquals(409, blocked.statusCode());
+
+        JsonNode problem = new ObjectMapper().readTree(blocked.body());
+        assertTrue(problem.path("retryable").asBoolean());
+
+        assertEquals(1, idempotencyRepository.release(scope, key));
+
+        HttpResponse<String> retried = post(senderEmail, body, key);
+
+        assertEquals(200, retried.statusCode());
+        assertEquals(1L, transferCount());
+    }
+
+    @Test
+    void twoDifferentKeysFromOneSenderBothTransfer() throws Exception {
+        String senderEmail = "two-keys-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "100.00");
+        Wallet receiver = fundedWallet("two-keys-receiver@example.com", "0.00");
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 10.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> first = post(senderEmail, body, "first-key");
+        HttpResponse<String> second = post(senderEmail, body, "second-key");
+
+        assertEquals(200, first.statusCode());
+        assertEquals(200, second.statusCode());
+
+        ObjectMapper mapper = new ObjectMapper();
+        String firstId = mapper.readTree(first.body()).path("id").asText();
+        String secondId = mapper.readTree(second.body()).path("id").asText();
+
+        assertNotEquals(firstId, secondId);
+        assertEquals(2L, transferCount());
+        assertEquals(
+                0,
+                walletBalance(receiver.getId())
+                        .compareTo(new BigDecimal("20.00")));
+    }
+
+    @Test
+    void postWithoutTheHeaderStillTransfers() throws Exception {
+        String senderEmail = "without-header-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "100.00");
+        Wallet receiver = fundedWallet("without-header-receiver@example.com", "0.00");
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 25.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> result = post(senderEmail, body, null);
+
+        assertEquals(200, result.statusCode());
+        assertEquals(1L, transferCount());
+        assertEquals(0L, idempotencyKeyCount());
+    }
+
+    @Test
+    void theSameKeyFromTwoDifferentSendersBothTransfer() throws Exception {
+        String firstSenderEmail = "shared-key-first@example.com";
+        String secondSenderEmail = "shared-key-second@example.com";
+        fundedWallet(firstSenderEmail, "100.00");
+        fundedWallet(secondSenderEmail, "100.00");
+        Wallet receiver = fundedWallet("shared-key-receiver@example.com", "0.00");
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 10.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> first = post(firstSenderEmail, body, "shared-key");
+        HttpResponse<String> second = post(secondSenderEmail, body, "shared-key");
+
+        assertEquals(200, first.statusCode());
+        assertEquals(200, second.statusCode());
+
+        ObjectMapper mapper = new ObjectMapper();
+        assertNotEquals(
+                mapper.readTree(first.body()).path("id").asText(),
+                mapper.readTree(second.body()).path("id").asText());
+        assertEquals(2L, transferCount());
+        assertEquals(2L, idempotencyKeyCount());
+    }
+
+    @Test
+    void aKeyIsReusableAfterTheTransferFails() throws Exception {
+        String senderEmail = "failed-transfer-sender@example.com";
+        Wallet sender = fundedWallet(senderEmail, "10.00");
+        Wallet receiver = fundedWallet("failed-transfer-receiver@example.com", "0.00");
+
+        String body = """
+                {
+                  "receiverWalletId": %d,
+                  "amount": 50.00
+                }
+                """.formatted(receiver.getId());
+
+        HttpResponse<String> failed = post(senderEmail, body, "poor-1");
+
+        assertEquals(409, failed.statusCode());
+        JsonNode problem = new ObjectMapper().readTree(failed.body());
+        assertEquals(409, problem.path("status").asInt());
+        assertEquals(0L, idempotencyKeyCount());
+
+        jdbc.sql("UPDATE wallets SET balance = ? WHERE id = ?")
+                .param(new BigDecimal("100.00"))
+                .param(sender.getId())
+                .update();
+
+        HttpResponse<String> retried = post(senderEmail, body, "poor-1");
+
+        assertEquals(200, retried.statusCode());
+        assertEquals(1L, transferCount());
     }
 
     @TestConfiguration
