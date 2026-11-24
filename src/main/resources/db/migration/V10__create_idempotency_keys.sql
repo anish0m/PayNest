@@ -1,0 +1,176 @@
+-- ===========================================================================
+--  DAY-11, STEP 1 — V10: the table that makes a retry safe.
+--
+--  WHY V10. V9 (add_version_to_wallets) is the highest existing version, so
+--  this is V10. Same rule as V6, V7, V9: the number is a position in YOUR
+--  history, not a label for the change.
+--
+--  ⚠️ V1-V9 ARE ALREADY APPLIED TO paynest_test. Flyway has stored a checksum
+--  for each. Do NOT edit any of them, not even to add a comment — Flyway
+--  checksums comment lines too, and a comments-only edit breaks validation on
+--  the next boot, failing every IT at startup. V10 is a new file, so it has no
+--  stored checksum until it first applies: rewrite it freely until then.
+--
+--  ⚠️ AND ONCE IT APPLIES, IT IS SPENT. If you write this file empty (or with
+--  comments only) and run the suite, Flyway records V10 as applied with
+--  success = t, and the table does not exist. The next run will NOT re-run it.
+--  So: write the real DDL BEFORE the next `./mvnw test`.
+--
+--  ---------------------------------------------------------------------------
+--  WHAT THIS TABLE IS FOR
+--
+--  The client's network died mid-POST. It does not know whether the transfer
+--  happened. It retries. Today, PayNest moves the money twice — nothing in V8
+--  or V9 stops it, because both requests are perfectly legal transfers.
+--
+--  V9's version column cannot help here. Optimistic locking arbitrates between
+--  two writers racing for ONE row. These two requests are not racing: the first
+--  committed long ago. The second is simply a different, later, valid transfer.
+--
+--  The only thing that distinguishes them is a token the CLIENT sends, saying
+--  "this is the same intention as before". This table is where that token lives,
+--  and the uniqueness of its key is the whole mechanism:
+--
+--      INSERT ... ON CONFLICT DO NOTHING  ->  rows = 1  you are the first
+--                                             rows = 0  someone already claimed
+--
+--  The INSERT *is* the lock. Note what we are NOT doing: a SELECT to check
+--  whether the key exists, then an INSERT. That is Day-10's check-then-act lost
+--  update wearing a different hat — two requests both SELECT "absent", both
+--  INSERT, and you are back to two transfers. The database must decide, in one
+--  statement, and tell you by the row count.
+--
+--  ---------------------------------------------------------------------------
+--  WHAT TO WRITE (four decisions, in order)
+--
+--  (a) CREATE TABLE idempotency_keys.
+--
+CREATE TABLE idempotency_keys (
+--
+--  (b) THE PRIMARY KEY IS COMPOSITE: (scope, idempotency_key).
+--
+--      scope is a VARCHAR holding the sender's wallet id as text (the service
+--      will pass something like "wallet:20"). It is text, not BIGINT, so a
+--      later feature can scope a key by something that is not a wallet without
+--      another migration.
+--
+--      WHY SCOPE AT ALL, instead of making idempotency_key unique on its own?
+--      Because clients choose their own keys. If Alice sends "retry-1" and Bob
+--      independently sends "retry-1", a globally-unique key means Bob's genuine
+--      transfer is rejected as Alice's duplicate — one client can deny service
+--      to another, and worse, can probe whether a key was used. Scoping makes
+--      each caller's key space their own.
+--
+--      ⚠️ And the scope must come from the authenticated Principal, never from
+--      the request body. A body-supplied scope lets any caller write into
+--      anyone's key space, which is the same class of bug as putting the sender
+--      id in the request body.
+--
+--      Declare it as PRIMARY KEY (scope, idempotency_key) — that is both the
+--      uniqueness constraint ON CONFLICT will fire on, and the index the
+--      lookup uses. You do not need a separate CREATE INDEX.
+--
+      scope VARCHAR NOT NULL,
+      idempotency_key VARCHAR NOT NULL,
+--
+--  (c) status VARCHAR NOT NULL, constrained by a CHECK to exactly three values:
+--      IN_PROGRESS, COMPLETED, FAILED.
+--
+--      WHY THREE AND NOT TWO. A row that only means "done" cannot answer the
+--      question the retry actually asks. The three states answer three
+--      different questions:
+--
+--        IN_PROGRESS  the first request is still running, right now. The retry
+--                     must not start a second transfer and must not invent an
+--                     answer. -> 409, retryable: true ("ask me again shortly").
+--        COMPLETED    the first request finished. The retry gets the SAME
+--                     result, having moved no money.
+--        FAILED       the first request failed in a way that is safe to retry.
+--                     The claim is released so a retry may genuinely try again.
+--
+--      WHY A CHECK CONSTRAINT RATHER THAN TRUSTING THE CODE. The column is
+--      written by Java today; it will be written by a backfill script, a
+--      support fix, or a second service eventually. The CHECK is the only part
+--      of this guarantee that holds when the writer is not your code.
+--
+--      ⚠️ Write the three values in the CHECK EXACTLY as the Java enum will
+--      spell them (upper case, underscore). The database will not tell you
+--      about a mismatch until a real INSERT fails at runtime.
+--
+      status VARCHAR NOT NULL
+          CHECK (status IN ('IN_PROGRESS', 'COMPLETED', 'FAILED')),
+--
+--  (d) The columns that make the retry answerable, plus audit:
+--
+--      transfer_id UUID NULL
+--          The result. NULL while IN_PROGRESS, filled when COMPLETED — that is
+--          precisely why it cannot be NOT NULL: the row is inserted BEFORE the
+--          transfer exists. Reference transfers(id) if you want the FK; decide
+--          deliberately, because an FK means a deleted transfer blocks or
+--          cascades into this table. (Check V8 for the actual column name
+--          before writing the REFERENCES clause — do not assume it.)
+--
+--      request_fingerprint VARCHAR NOT NULL
+--          A hash of the request body. This is what separates "the same request
+--          again" (409/replay) from "a reused key with DIFFERENT contents",
+--          which is a client bug and must be rejected outright — 422, because
+--          retrying cannot fix it. Without this column the API will happily
+--          return a £5 transfer's result to a £500 request.
+--
+--      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--          Use TIMESTAMPTZ, matching the project's existing choice — check V8
+--          to confirm before you type it, and match whatever is there.
+--          This column is also what a future expiry job would sweep on; keys
+--          are not meant to live forever.
+--
+      transfer_id UUID REFERENCES transfers(id),
+      request_fingerprint VARCHAR NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (scope, idempotency_key)
+);
+--
+--  ---------------------------------------------------------------------------
+--  WHY THE ROW IS INSERTED BEFORE THE WORK, NOT AFTER
+--
+--  This is the part that is genuinely counter-intuitive, and the table's shape
+--  only makes sense once it lands.
+--
+--  The obvious design is: do the transfer, then record the key. It cannot work.
+--  If the transfer succeeds and the process dies before the record is written,
+--  the retry moves the money again — the window you were trying to close is
+--  still open, just narrower.
+--
+--  So the row goes in FIRST, as a claim, with status IN_PROGRESS and
+--  transfer_id still NULL. The claim must be COMMITTED before the transfer
+--  starts, because a uniqueness constraint only arbitrates between committed
+--  rows — an uncommitted INSERT is invisible to the retry's INSERT (which will
+--  block, then succeed or conflict depending on what the first one does).
+--
+--  Which means claim and work are TWO transactions, not one. That is step 5's
+--  problem, not this file's. Note the trap it creates so it is not a surprise:
+--  if the work rolls back inside the same transaction as the claim, the claim
+--  rolls back with it — the act of recording "this failed" is undone by the
+--  failure.
+--
+--  ---------------------------------------------------------------------------
+--  AFTER WRITING THIS FILE
+--
+--  Do not run the suite yet — it is safe, but there is nothing to see. The
+--  verification for step 1 is a single question answered with psql against
+--  paynest_test after the next `./mvnw test`:
+--
+--    1. Does the table exist with the composite PK?
+--         \d idempotency_keys
+--       Expect: "Indexes: idempotency_keys_pkey PRIMARY KEY, btree (scope,
+--       idempotency_key)". If the PK shows only one column, ON CONFLICT will
+--       fire on the wrong thing and the scoping is gone.
+--
+--    2. Does the CHECK reject a bad status?
+--         INSERT ... with status 'DONE'
+--       Expect: ERROR, new row violates check constraint. If it SUCCEEDS, the
+--       CHECK is missing or its values do not match, and nothing downstream
+--       will catch it.
+--
+--  ⚠️ Running `./mvnw test` applies this migration to paynest_test. Whatever is
+--  in this file at that moment is what V10 means forever.
+-- ===========================================================================

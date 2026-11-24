@@ -1,33 +1,49 @@
 package com.paynest.common.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import com.paynest.category.exception.CategoryInUseException;
 import com.paynest.category.exception.CategoryNotFoundException;
 import com.paynest.category.exception.DuplicateCategoryException;
 
-import com.paynest.user.exception.DuplicateEmailException;
-import com.paynest.user.exception.UserNotFoundException;
-import com.paynest.user.exception.InvalidCredentialsException;
-
-import com.paynest.wallet.exception.WalletNotFoundException;
-import com.paynest.wallet.exception.WalletFrozenException;
+import com.paynest.idempotency.exception.IdempotencyConflictException;
+import com.paynest.idempotency.exception.IdempotencyKeyReusedException;
 
 import com.paynest.transfer.exception.InsufficientFundsException;
 import com.paynest.transfer.exception.SelfTransferException;
+import com.paynest.transfer.exception.TransferNotFoundException;
+import com.paynest.transfer.exception.WalletAccessDeniedException;
+
+import com.paynest.user.exception.DuplicateEmailException;
+import com.paynest.user.exception.InvalidCredentialsException;
+import com.paynest.user.exception.UserNotFoundException;
+
+import com.paynest.wallet.exception.WalletFrozenException;
+import com.paynest.wallet.exception.WalletNotFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleUserNotFound(UserNotFoundException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, e.getMessage());
+        problem.setTitle("Not Found");
+        return problem;
+    }
+
+    @ExceptionHandler(TransferNotFoundException.class)
+    public ProblemDetail handleTransferNotFound(
+            TransferNotFoundException e) {
+
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, e.getMessage());
         problem.setTitle("Not Found");
@@ -126,6 +142,17 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(WalletAccessDeniedException.class)
+    public ProblemDetail handleWalletAccessDenied(
+            WalletAccessDeniedException e) {
+
+        // Do not expose wallet properties; this avoids confirming resource details.
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, e.getMessage());
+        problem.setTitle("Forbidden");
+        return problem;
+    }
+
     @ExceptionHandler(SelfTransferException.class)
     public ProblemDetail handleSelfTransfer(SelfTransferException e) {
 
@@ -136,4 +163,40 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLockingFailure(
+            ObjectOptimisticLockingFailureException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The transfer could not be completed because the wallet changed. Please retry the request.");
+        problem.setTitle("Temporary Conflict");
+        problem.setProperty("retryable", true);
+        return problem;
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(
+            IdempotencyConflictException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The request with this idempotency key is still being processed. Please retry.");
+        problem.setTitle("Temporary Conflict");
+        problem.setProperty("retryable", true);
+        problem.setProperty("idempotencyKey", e.getIdempotencyKey());
+        return problem;
+    }
+    @ExceptionHandler(IdempotencyKeyReusedException.class)
+    public ProblemDetail handleIdempotencyKeyReused(
+            IdempotencyKeyReusedException e) {
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "This idempotency key was already used for a different request.");
+        problem.setTitle("Unprocessable Entity");
+        problem.setProperty("retryable", false);
+        problem.setProperty("idempotencyKey", e.getIdempotencyKey());
+        return problem;
+    }
 }

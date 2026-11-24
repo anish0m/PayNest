@@ -1,9 +1,13 @@
 package com.paynest.transfer.repository;
 
 import com.paynest.transfer.model.Transfer;
+import com.paynest.transfer.dto.TransferFilter;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Comparator;
 import java.util.List;
@@ -36,20 +40,45 @@ public class InMemoryTransferRepository implements TransferRepository {
     }
 
     @Override
-    public List<Transfer> findBySenderWalletId(Long walletId) {
-        return transfersById.values().stream()
+    public Page<Transfer> findByWalletId(
+            Long walletId,
+            TransferFilter filter,
+            Pageable pageable) {
+
+        List<Transfer> matchingTransfers = transfersById.values().stream()
                 .filter(transfer -> Objects.equals(
-                        transfer.getSenderWalletId(), walletId))
+                        transfer.getSenderWalletId(), walletId)
+                        || Objects.equals(
+                        transfer.getReceiverWalletId(), walletId))
+                .filter(transfer -> filter.status() == null
+                        || transfer.getStatus() == filter.status())
+                .filter(transfer -> filter.from() == null
+                        || (transfer.getCreatedAt() != null
+                        && !transfer.getCreatedAt().isBefore(filter.from())))
+                .filter(transfer -> filter.to() == null
+                        || (transfer.getCreatedAt() != null
+                        && transfer.getCreatedAt().isBefore(filter.to())))
+                .filter(transfer -> filter.minAmount() == null
+                        || transfer.getAmount().compareTo(
+                        filter.minAmount()) >= 0)
+                .filter(transfer -> filter.maxAmount() == null
+                        || transfer.getAmount().compareTo(
+                        filter.maxAmount()) <= 0)
                 .sorted(CREATED_AT_DESC)
                 .toList();
+
+        int total = matchingTransfers.size();
+
+        long offset = Math.min(pageable.getOffset(), total);
+        int start = (int) offset;
+        int end = (int) Math.min(
+                offset + pageable.getPageSize(),
+                total);
+
+        List<Transfer> pageOfRows =
+                matchingTransfers.subList(start, end);
+
+        return new PageImpl<>(pageOfRows, pageable, total);
     }
 
-    @Override
-    public List<Transfer> findByReceiverWalletId(Long walletId) {
-        return transfersById.values().stream()
-                .filter(transfer -> Objects.equals(
-                        transfer.getReceiverWalletId(), walletId))
-                .sorted(CREATED_AT_DESC)
-                .toList();
-    }
 }

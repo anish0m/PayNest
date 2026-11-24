@@ -16,4 +16,6 @@ public interface WalletRepository {
     int debitIfSufficient(Long walletId, BigDecimal amount);
 
     Optional<Wallet> findById(Long id);
+
+    Optional<Wallet> findByIdForUpdate(Long id);
 }
