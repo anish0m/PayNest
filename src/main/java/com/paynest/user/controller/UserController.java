@@ -65,7 +65,7 @@ public class UserController {
 
     @GetMapping("/{email}")
     public UserResponse findByEmail(@PathVariable String email) {
-        return UserResponse.from(service.getByEmail(email));
+        return service.getProfile(email);
     }
 
     /**
@@ -93,7 +93,7 @@ public class UserController {
 
     @GetMapping("/me")
     public UserResponse me(java.security.Principal principal) {
-        return UserResponse.from(service.getByEmail(principal.getName()));
+        return service.getProfile(principal.getName());
     }
 
     @PreAuthorize("#email == authentication.name or hasRole('ADMIN')")

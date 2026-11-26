@@ -118,7 +118,7 @@ class UserControllerTest {
     // The opposite of 409: does not exist, vs already exists.
     @Test
     void fetchingAMissingUserReturns404() throws Exception {
-        when(service.getByEmail(anyString()))
+        when(service.getProfile(anyString()))
                 .thenThrow(new UserNotFoundException("nobody@example.com"));
 
         mockMvc.perform(get("/users/nobody@example.com"))

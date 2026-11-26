@@ -1,15 +1,19 @@
 package com.paynest.user.service;
 
+import com.paynest.config.CacheConfig;
+
+import com.paynest.user.dto.CreateUserRequest;
+import com.paynest.user.dto.LoginRequest;
+import com.paynest.user.dto.UpdateProfileRequest;
+import com.paynest.user.dto.UserResponse;
 import com.paynest.user.exception.DuplicateEmailException;
+import com.paynest.user.exception.InvalidCredentialsException;
 import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
-import com.paynest.user.dto.CreateUserRequest;
-import com.paynest.user.dto.UpdateProfileRequest;
-import com.paynest.user.dto.LoginRequest;
-import com.paynest.user.exception.InvalidCredentialsException;
 
 import com.paynest.wallet.service.WalletService;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,6 +118,10 @@ public class UserService {
      * deliberately omits {@code @NotBlank} on it, since leaving {@code image} out of
      * the JSON body is how a caller expresses "clear it," and {@code User.setImage}
      * already treats {@code null} as valid.
+     *
+     * <p>A cached display profile may remain stale for the short TTL after an edit.
+     * That is acceptable for profile data, unlike a wallet balance, so this step does
+     * not evict before the transaction commits.
      */
     @Transactional
     public User updateProfile(String email, UpdateProfileRequest request) {
@@ -146,10 +154,18 @@ public class UserService {
         return repository.findByEmail(email);
     }
 
+    // With one method argument, Spring's default cache key is that argument: email.
+    @Cacheable(cacheNames = CacheConfig.USER_PROFILE)
+    public UserResponse getProfile(String email) {
+        return UserResponse.from(repository.getByEmail(email));
+    }
+
     public User getByEmail(String email) {
         return repository.getByEmail(email);
     }
 
+    // A deleted profile may remain readable from cache until its short TTL expires;
+    // this step deliberately accepts that bounded staleness rather than pre-commit eviction.
     public void deleteByEmail(String email) {
         repository.deleteByEmail(email);
     }
