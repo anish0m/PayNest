@@ -28,7 +28,7 @@ class WalletServiceTest {
     void setUp() {
         users = new InMemoryUserRepository();
         wallets = new InMemoryWalletRepository();
-        service = new WalletService(wallets, users);
+        service = new WalletService(wallets, users, event -> {});
     }
 
     private Wallet walletFor(String email) {

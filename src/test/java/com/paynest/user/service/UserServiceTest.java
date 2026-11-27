@@ -148,7 +148,7 @@ class UserServiceTest {
 
         RecordingWalletService() {
             // Safe because this fake overrides every method this test calls.
-            super(null, null);
+            super(null, null, null);
         }
 
         @Override

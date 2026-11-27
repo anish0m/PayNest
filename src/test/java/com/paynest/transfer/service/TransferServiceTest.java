@@ -72,7 +72,7 @@ class TransferServiceTest {
         transfers = new InMemoryTransferRepository();
 
         WalletService walletService =
-                new WalletService(wallets, users);
+                new WalletService(wallets, users, event -> {});
 
         service = new TransferService(
                 wallets,
@@ -654,7 +654,7 @@ class TransferServiceTest {
         wallets = conflictWallets;
         transfers = new InMemoryTransferRepository();
 
-        WalletService walletService = new WalletService(wallets, users);
+        WalletService walletService = new WalletService(wallets, users, event -> {});
         service = new TransferService(wallets, transfers, walletService);
 
         return conflictWallets;
