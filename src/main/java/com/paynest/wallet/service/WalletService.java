@@ -1,17 +1,22 @@
 package com.paynest.wallet.service;
 
+import com.paynest.config.CacheConfig;
+
 import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
+
+import com.paynest.wallet.dto.WalletResponse;
 import com.paynest.wallet.exception.WalletNotFoundException;
 import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.repository.WalletRepository;
 import com.paynest.wallet.exception.WalletFrozenException;
 import com.paynest.wallet.model.WalletStatus;
 
+import java.math.BigDecimal;
+
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
 
 @Service
 public class WalletService {
@@ -30,6 +35,12 @@ public class WalletService {
 
         return wallets.findByUserId(user.getId())
                 .orElseThrow(() -> new WalletNotFoundException(email));
+    }
+
+    // Cache a DTO for reads; getByEmail stays a managed entity lookup for mutations.
+    @Cacheable(cacheNames = CacheConfig.WALLET_BALANCE)
+    public WalletResponse getBalance(String email) {
+        return WalletResponse.from(getByEmail(email));
     }
 
     private void assertMovementAllowed(Wallet wallet) {

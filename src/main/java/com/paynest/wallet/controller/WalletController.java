@@ -26,7 +26,7 @@ public class WalletController {
 
     @GetMapping("/me")
     public WalletResponse me(Principal principal) {
-        return WalletResponse.from(service.getByEmail(principal.getName()));
+        return service.getBalance(principal.getName());
     }
 
     @PostMapping("/me/deposit")
