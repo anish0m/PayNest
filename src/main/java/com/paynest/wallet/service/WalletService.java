@@ -6,6 +6,7 @@ import com.paynest.user.model.User;
 import com.paynest.user.repository.UserRepository;
 
 import com.paynest.wallet.dto.WalletResponse;
+import com.paynest.wallet.event.WalletChangedEvent;
 import com.paynest.wallet.exception.WalletNotFoundException;
 import com.paynest.wallet.model.Wallet;
 import com.paynest.wallet.repository.WalletRepository;
@@ -15,6 +16,7 @@ import com.paynest.wallet.model.WalletStatus;
 import java.math.BigDecimal;
 
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +25,15 @@ public class WalletService {
 
     private final WalletRepository wallets;
     private final UserRepository users;
+    private final ApplicationEventPublisher events;
 
-    public WalletService(WalletRepository wallets, UserRepository users) {
+    public WalletService(
+            WalletRepository wallets,
+            UserRepository users,
+            ApplicationEventPublisher events) {
         this.wallets = wallets;
         this.users = users;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -53,6 +60,7 @@ public class WalletService {
     public Wallet updateStatus(String email, WalletStatus newStatus) {
         Wallet wallet = getByEmail(email);
         wallet.changeStatus(newStatus);
+        events.publishEvent(new WalletChangedEvent(wallet.getId()));
         return wallet;
     }
 
@@ -61,6 +69,7 @@ public class WalletService {
         Wallet wallet = getByEmail(email);
         assertMovementAllowed(wallet);
         wallet.credit(amount);
+        events.publishEvent(new WalletChangedEvent(wallet.getId()));
         return wallet;
     }
 
